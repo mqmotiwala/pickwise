@@ -1,7 +1,6 @@
 import streamlit as st
 import helpers as h
 import pandas as pd
-import config as c
 
 st.set_page_config(layout="wide")
 
