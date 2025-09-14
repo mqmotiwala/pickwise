@@ -2,6 +2,7 @@ import os
 import json
 import shutil
 import config as c 
+import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 
@@ -55,10 +56,21 @@ def generate_results():
     ANALYSIS_START_DATE = min(
             dt.strptime(trade["date"], c.DATES_FORMAT) for trade in trades
         )- td(days=c.NUM_DAYS_PRECEDING_ANALYSIS)
+    
+    # generate a df with all dates since ANALYSIS_START_DATE
+    # this is explicitly required to ensure res holds all dates, incl. non-trading dates
+    # which are excluded by default by yfinance API 
+    date_range = pd.date_range(
+        start=ANALYSIS_START_DATE, 
+        end=dt.now().date(),
+        freq="D")
+
+    res = pd.DataFrame(date_range, columns=["Date"])
 
     # get STOCK and MARKET ticker values for all analysis dates
     tickers = list(set(trade["ticker"] for trade in trades)) + [c.MARKET]
-    res = yf.download(tickers, start=ANALYSIS_START_DATE, end=dt.now().date() + td(days=1), interval="1d", session=session)["Close"]
+    data = yf.download(tickers, start=ANALYSIS_START_DATE, end=dt.now().date() + td(days=1), interval="1d", session=session)["Close"]
+    res = res.merge(data, on="Date", how="left")
 
     # reset index to make Date a column
     res.reset_index(inplace=True)
@@ -246,8 +258,8 @@ def validate_changes(edited_trades):
     if edited_trades.isnull().values.any():
         return True, "You have trades with unfinished details."
     if edited_trades["date"].apply(lambda d: not isinstance(d, str) or len(d) != 10 or dt.strptime(d, c.DATES_FORMAT, ).strftime(c.DATES_FORMAT) != d).any():
-        return True, "One or more dates are not in the correct format (YYYY-MM-DD)."
+        return True, "Dates must be in the correct format (YYYY-MM-DD)."
     if (edited_trades["amount"].apply(lambda a: not isinstance(a, (int, float)) or a <= 0)).any():
-        return True, "One or more amounts are not valid positive numbers."
+        return True, "Amounts must be valid positive numbers."
 
     return False, None
