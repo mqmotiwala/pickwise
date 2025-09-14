@@ -41,7 +41,8 @@ def save_trades(edited_trades):
     backup_path = f"backup/trades_backup_{timestamp}_cnt{len(trades)}.json"
 
     # Copy current trades.json to backup
-    shutil.copy(c.TRADES_JSON_PATH, backup_path)
+    if os.path.exists(c.TRADES_JSON_PATH):
+        shutil.copy(c.TRADES_JSON_PATH, backup_path)
 
     # Save new trades.json
     with open(c.TRADES_JSON_PATH, "w") as f:
