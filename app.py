@@ -33,3 +33,4 @@ if st.button("💾 Save Changes"):
     else:
         h.save_trades(edited_trades)
         st.success(f"Trades saved.")
+        st.rerun()
