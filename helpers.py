@@ -33,18 +33,6 @@ def load_trades(enabled_only=True):
         return trades
     
 def save_trades(edited_trades):
-    # Create backup directory if it doesn't exist
-    os.makedirs("backup", exist_ok=True)
-
-    # Generate timestamped backup filename
-    trades = load_trades(enabled_only=False)
-    timestamp = dt.now().strftime("%Y%m%d_%H%M%S")
-    backup_path = f"backup/trades_backup_{timestamp}_cnt{len(trades)}.json"
-
-    # Copy current trades.json to backup
-    if os.path.exists(c.TRADES_JSON_PATH):
-        shutil.copy(c.TRADES_JSON_PATH, backup_path)
-
     # Save new trades.json
     with open(c.TRADES_JSON_PATH, "w") as f:
         edited_trades.to_json(f, orient="records", indent=4)
