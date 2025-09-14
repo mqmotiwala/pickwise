@@ -2,7 +2,11 @@ import streamlit as st
 import helpers as h
 import pandas as pd
 
-st.set_page_config(layout="wide")
+st.set_page_config(
+    page_title="pickwise",
+    page_icon="📈",
+    layout="wide"
+)
 
 st.subheader('Stock Picking vs. ETF Investing Portfolios Over Time')
 res = h.generate_results()
