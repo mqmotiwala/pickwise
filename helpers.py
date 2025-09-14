@@ -141,6 +141,22 @@ def plot_results(res):
     plt.plot(res['Date'], res["portfolio_value"], label=c.STOCK_PORTFOLIO_LABEL)
     plt.plot(res['Date'], res["market_value"], label=c.MARKET_PORTFOLIO_LABEL)
 
+    # Add annotations for trades
+    for i, row in res.iterrows():
+        if row.get("trades"):
+            # Format annotation text from trade notes or tickers
+            notes = ", ".join([f"{t['ticker']}" for t in row["trades"]])
+            y_pos = row["portfolio_value"]
+            plt.annotate(
+                notes,
+                xy=(row["Date"], y_pos),
+                xytext=(0, 10),
+                textcoords="offset points",
+                fontsize=8,
+                arrowprops=dict(arrowstyle="->", color="gray"),
+                ha='center'
+            )
+
     # Formatting
     plt.xlabel('Date')
     plt.ylabel('Portfolio Value ($)')
