@@ -1,6 +1,5 @@
-import os
+import io
 import json
-import shutil
 import config as c 
 import pandas as pd
 import yfinance as yf
@@ -17,25 +16,32 @@ session = requests.Session(impersonate="chrome")
 
 def load_trades(enabled_only=True):
     """
-        Load trades from trades.json file.
+        Load trades from trades.json object in S3.
         If enabled_only is True, only return trades with "enabled" key = true.
     """
 
-    if not os.path.exists(c.TRADES_JSON_PATH):
-        return c.DEFAULT_TRADES
-        
-    with open(c.TRADES_JSON_PATH, "r") as f:
-        trades = json.load(f)
+    response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TRADES_JSON_PATH)
+    trades_str = response['Body'].read().decode('utf-8')
+    trades = json.loads(trades_str)
 
     if enabled_only:
         return [trade for trade in trades if trade.get("enabled", True)]
     else:
         return trades
-    
+
 def save_trades(edited_trades):
-    # Save new trades.json
-    with open(c.TRADES_JSON_PATH, "w") as f:
-        edited_trades.to_json(f, orient="records", indent=4)
+    """Save edited trades DataFrame to S3 as JSON."""
+    # Convert DataFrame to JSON string using a buffer
+    json_buffer = io.StringIO()
+    edited_trades.to_json(json_buffer, orient="records", indent=4)
+
+    # Upload to S3
+    c.s3.put_object(
+        Bucket=c.S3_BUCKET,
+        Key=c.TRADES_JSON_PATH,
+        Body=json_buffer.getvalue(),
+        ContentType='application/json'
+    )
 
 def generate_results():
     trades = load_trades()
