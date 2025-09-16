@@ -1,4 +1,5 @@
 import io
+import re
 import json
 import config as c 
 import pandas as pd
@@ -14,18 +15,24 @@ from datetime import timedelta as td
 # which, without this session, is set to python-requests
 session = requests.Session(impersonate="chrome")
 
-def load_trades(enabled_only=True):
+def load_trades(selected_tags=None):
     """
         Load trades from trades.json object in S3.
-        If enabled_only is True, only return trades with "enabled" key = true.
+
+        If selected_tags is provided, only return matching trades
+        else, return all 
     """
 
     response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TRADES_JSON_PATH)
     trades_str = response['Body'].read().decode('utf-8')
     trades = json.loads(trades_str)
 
-    if enabled_only:
-        return [trade for trade in trades if trade.get("enabled", True)]
+    
+    if selected_tags:
+        return [
+            trade for trade in trades
+            if trade.get("tags") and any(tag in trade["tags"] for tag in selected_tags)
+        ]
     else:
         return trades
 
@@ -43,8 +50,8 @@ def save_trades(edited_trades):
         ContentType='application/json'
     )
 
-def generate_results():
-    trades = load_trades()
+def generate_results(selected_tags):
+    trades = load_trades(selected_tags=selected_tags)
 
     # get analysis start date based on earliest trade date
     ANALYSIS_START_DATE = min(
@@ -172,7 +179,7 @@ def plot_results(res):
             
     return plt
 
-def get_metrics(res):
+def get_metrics(res, selected_tags):
     metrics = []
 
     # metric: number of trades
@@ -183,7 +190,7 @@ def get_metrics(res):
     })
 
     # metrics: number of winning/losing trades
-    trades = load_trades()
+    trades = load_trades(selected_tags=selected_tags)
     tickers = list(set(trade["ticker"] for trade in trades))
     
     number_of_winners = 0
@@ -249,7 +256,9 @@ def validate_changes(edited_trades):
         else returns False, None
     """
 
-    if edited_trades.isnull().values.any():
+    # allow tags to be empty
+    # remaining cols must be filled
+    if edited_trades[[col for col in edited_trades.columns if col != "tags"]].isnull().values.any():
         return True, "You have trades with unfinished details."
     if edited_trades["date"].apply(lambda d: not isinstance(d, str) or len(d) != 10 or dt.strptime(d, c.DATES_FORMAT, ).strftime(c.DATES_FORMAT) != d).any():
         return True, "Dates must be in the correct format (YYYY-MM-DD)."
@@ -257,3 +266,15 @@ def validate_changes(edited_trades):
         return True, "Amounts must be valid positive numbers."
 
     return False, None
+
+def remove_non_alphanumeric(s):
+    # Keep alphanumerics, underscores, and hyphens
+    return re.sub(r'[^a-zA-Z0-9_-]', '', s)
+
+def get_tags(trades):
+    return {
+        remove_non_alphanumeric(s)
+        for t in trades
+        if isinstance(t.get("tags"), str)
+        for s in t["tags"].split()
+    }
