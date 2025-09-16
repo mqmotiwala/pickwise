@@ -107,6 +107,11 @@ def generate_results(selected_tags):
 
     return res
 
+def color_vals(val):
+    """pd styler to color cell text based on value"""
+    color = "green" if val > 0 else "red"
+    return f"color: {color}"
+
 def calculate_cumulative_shares(df):
     portfolio = {}  # Running portfolio dict
     cumulative_shares = []

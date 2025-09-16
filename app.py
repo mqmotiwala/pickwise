@@ -62,7 +62,7 @@ for col, metric in zip(cols, metrics):
             )
 
 st.dataframe(
-    pd.DataFrame(trades_summary),
+    pd.DataFrame(trades_summary).style.applymap(h.color_vals, subset=["return", "market_return"]),
     column_config=c.COLUMN_CONFIGS
 )
             
