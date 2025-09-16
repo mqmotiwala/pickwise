@@ -1,6 +1,7 @@
 import streamlit as st
 import helpers as h
 import pandas as pd
+import time
 
 st.set_page_config(
     page_title="pickwise",
@@ -9,13 +10,24 @@ st.set_page_config(
 )
 
 st.subheader('Stock Picking vs. ETF Investing Portfolios Over Time')
-res = h.generate_results()
-st.pyplot(h.plot_results(res))
 
-st.divider()
+res = h.generate_results()
 
 st.subheader("Trades")
 trades = h.load_trades(enabled_only=False)
+edited_trades = st.data_editor(pd.DataFrame(trades), hide_index=True, num_rows="dynamic")
+if st.button("💾 Save Changes"):
+    valid, error_msg = h.validate_changes(edited_trades)
+
+    if valid:
+         st.error(f"Save rejected. {error_msg}", icon="🚨")
+    else:
+        h.save_trades(edited_trades)
+        st.success(f"Trades saved.")
+        st.rerun()
+
+st.divider()
+
 metrics = h.get_metrics(res)
 cols = st.columns(len(metrics))
 for col, metric in zip(cols, metrics):
@@ -27,13 +39,11 @@ for col, metric in zip(cols, metrics):
                 help = metric.get("help", None)
             )
 
-edited_trades = st.data_editor(pd.DataFrame(trades), hide_index=True, num_rows="dynamic")
-if st.button("💾 Save Changes"):
-    valid, error_msg = h.validate_changes(edited_trades)
-
-    if valid:
-         st.error(f"Save rejected. {error_msg}", icon="🚨")
-    else:
-        h.save_trades(edited_trades)
-        st.success(f"Trades saved.")
-        st.rerun()
+st.pyplot(h.plot_results(res))
+st.download_button(
+    label="Download CSV",
+    data=res.to_csv(index=False).encode("utf-8"),
+    file_name=f"data_{int(time.time())}.csv",
+    mime="text/csv",
+    icon=":material/download:",
+)
