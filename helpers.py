@@ -38,6 +38,15 @@ def load_trades(selected_tags=None):
 
 def save_trades(edited_trades):
     """Save edited trades DataFrame to S3 as JSON."""
+    # Set date format when saving to json
+    # without this step, date data is saved as unix ms
+    edited_trades["date"] = edited_trades["date"].dt.strftime(c.DATES_FORMAT)
+
+    # if trades.json saves empty tags as None
+    # then streamlit ListColumn fails to properly recognize newly added elements
+    # to avoid this, force save empty tags as an empty array
+    edited_trades["tags"] = edited_trades["tags"].apply(lambda x: [] if x is None else x)
+
     # Convert DataFrame to JSON string using a buffer
     json_buffer = io.StringIO()
     edited_trades.to_json(json_buffer, orient="records", indent=4)
@@ -179,42 +188,58 @@ def plot_results(res):
             
     return plt
 
-def get_metrics(res, selected_tags):
+def get_metrics(res):
     metrics = []
 
     # metric: number of trades
     metrics.append({
         "label": "Total Trades", 
         "value": res["trades"].apply(len).sum(),
-        "help": "Only enabled trades are included"
+        "help": "All trades are included except when filtered by tags."
     })
 
-    # metrics: number of winning/losing trades
-    trades = load_trades(selected_tags=selected_tags)
-    tickers = list(set(trade["ticker"] for trade in trades))
-    
-    number_of_winners = 0
+    # calculate trades metadata
+    trading_days = res[res["trades"].notna() & res["trades"].astype(bool)]
+    latest_date = res.iloc[-1]
+
     winners = []
-    for ticker in tickers:
-        # get first index with value for ticker
-        first_valid = res[ticker].first_valid_index()
-        first_value = res.loc[first_valid, ticker] if first_valid is not None else None
-        last_value = res[ticker].iloc[-1]
-        if first_value and last_value:
-            if last_value > first_value:
-                number_of_winners += 1
-                winners.append(ticker)
-        
+    losers = []
+    total_invested = 0
+    trades_summary = []
+    for _, row in trading_days.iterrows():
+        market_purchase_price = row[c.MARKET]
+        for trade in row["trades"]:
+            total_invested += trade["amount"]
+
+            trade_id = f"{trade["date"]} | {trade["ticker"]}"
+            purchase_price = row[trade["ticker"]]
+            latest_price = latest_date[trade["ticker"]]
+            latest_market_price = latest_date[c.MARKET]
+            trades_summary.append({
+                "ticker": trade["ticker"],
+                "date": trade["date"],
+                "purchase_price": purchase_price,
+                "latest_price": latest_price,
+                "return": (latest_price - purchase_price)/purchase_price,
+                "market_return": (latest_market_price - market_purchase_price)/market_purchase_price
+            })
+
+            if purchase_price < latest_price:
+                winners.append(trade_id)
+            else:
+                losers.append(trade_id)
+
+    # metrics: number of winning/losing trades
     metrics.append({
         "label": "Winning Trades", 
-        "value": number_of_winners,
-        "help": f"Winning tickers: {', '.join(winners)}" if winners else "No winners! 😞"
+        "value": len(winners),
+        "help": "**Winning trades**\n\n" + "\n\n".join(winners) if winners else "No winners! 😞",
     })
 
     metrics.append({
         "label": "Losing Trades", 
-        "value": len(tickers) - number_of_winners,
-        "help": f"Losing tickers: {', '.join([t for t in tickers if t not in winners])}" if len(tickers) - number_of_winners > 0 else "No losers! 🎉"
+        "value": len(losers),
+        "help": "**Losing trades**\n\n" + "\n\n".join(losers) if losers else "No losers! 🎉",
     })
 
     # metric: winning percentage
@@ -222,7 +247,6 @@ def get_metrics(res, selected_tags):
     # metrics.append({"label": "winning percentage", "value": f"{winning_percentage:.2f}%"})
 
     # metric: total invested
-    total_invested = sum(trade["amount"] for trade in trades)
     metrics.append({"label": "Total Invested", "value": f"${total_invested:,.2f}"})
 
     # metrics: final portfolio values
@@ -247,7 +271,7 @@ def get_metrics(res, selected_tags):
         "delta": f"{sign}${abs(delta):,.2f} | {sign}{abs(delta_pct):.2f}%"
     })
     
-    return metrics
+    return metrics, trades_summary
 
 def validate_changes(edited_trades):
     """
@@ -260,21 +284,16 @@ def validate_changes(edited_trades):
     # remaining cols must be filled
     if edited_trades[[col for col in edited_trades.columns if col != "tags"]].isnull().values.any():
         return True, "You have trades with unfinished details."
-    if edited_trades["date"].apply(lambda d: not isinstance(d, str) or len(d) != 10 or dt.strptime(d, c.DATES_FORMAT, ).strftime(c.DATES_FORMAT) != d).any():
-        return True, "Dates must be in the correct format (YYYY-MM-DD)."
     if (edited_trades["amount"].apply(lambda a: not isinstance(a, (int, float)) or a <= 0)).any():
         return True, "Amounts must be valid positive numbers."
 
     return False, None
 
-def remove_non_alphanumeric(s):
-    # Keep alphanumerics, underscores, and hyphens
-    return re.sub(r'[^a-zA-Z0-9_-]', '', s)
+def get_tags(edited_trades):
+    res = set()
+    for tags in edited_trades["tags"]:
+        if tags is not None:
+            for tag in tags:
+                res.add(tag)
 
-def get_tags(trades):
-    return {
-        remove_non_alphanumeric(s)
-        for t in trades
-        if isinstance(t.get("tags"), str)
-        for s in t["tags"].split()
-    }
+    return res

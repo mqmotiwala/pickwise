@@ -1,6 +1,7 @@
 import streamlit as st
 import helpers as h
 import pandas as pd
+import config as c
 import time
 
 st.set_page_config(
@@ -18,24 +19,29 @@ st.text("""
 """)
 
 trades = h.load_trades()
-edited_trades = st.data_editor(pd.DataFrame(trades), hide_index=True, num_rows="dynamic")
-if st.button("Save Changes", icon=":material/save:"):
+edited_trades = st.data_editor(
+    pd.DataFrame(trades).assign(date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT)), 
+    num_rows="dynamic",
+    column_config=c.COLUMN_CONFIGS
+)
+
+if st.button("Sync to Cloud", icon=":material/save:"):
     valid, error_msg = h.validate_changes(edited_trades)
 
     if valid:
          st.error(f"Save rejected. {error_msg}", icon="🚨")
     else:
         h.save_trades(edited_trades)
-        st.success(f"Trades saved.")
         st.rerun()
 
 st.divider()
 
 st.subheader("Analyze Trades")
 
-tags = h.get_tags(trades)
+tags = h.get_tags(edited_trades)
+pills_label_action = "Create" if len(tags) == 0 else "Choose"
 selected_tags = st.pills(
-    label = f"{'Add tags to ' if len(tags) == 0 else ''} optionally filter analysis by tags",
+    label = f"{pills_label_action} tags to selectively analyze trading strategies.",
     options = tags,
     selection_mode = "multi",
     default = None
@@ -44,7 +50,7 @@ selected_tags = st.pills(
 res = h.generate_results(selected_tags)
 
 st.markdown("") # empty space
-metrics = h.get_metrics(res, selected_tags)
+metrics, trades_summary = h.get_metrics(res)
 cols = st.columns(len(metrics))
 for col, metric in zip(cols, metrics):
      with col:
@@ -54,6 +60,11 @@ for col, metric in zip(cols, metrics):
                 delta = metric.get("delta", None),
                 help = metric.get("help", None)
             )
+
+st.dataframe(
+    pd.DataFrame(trades_summary),
+    column_config=c.COLUMN_CONFIGS
+)
             
 st.markdown("") # empty space
 st.pyplot(h.plot_results(res))

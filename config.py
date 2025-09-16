@@ -33,9 +33,22 @@ DEFAULT_TRADES = [{
         "enabled": True
     }]
 
-# plot labels
+# UI vars
+PREFERRED_UI_DATE_FORMAT_MOMENTJS = "dddd, MMMM DD, YYYY"
 STOCK_PORTFOLIO_LABEL = 'Stock Picking Portfolio'
 MARKET_PORTFOLIO_LABEL = f'100% {MARKET} Portfolio'
+COLUMN_CONFIGS = {
+    "_index": None,
+    "ticker": st.column_config.TextColumn("Ticker", width="small"),
+    "date": st.column_config.DateColumn("Date", format=PREFERRED_UI_DATE_FORMAT_MOMENTJS),
+    "purchase_price": st.column_config.NumberColumn("Purchase Price", format="dollar"),
+    "latest_price": st.column_config.NumberColumn("Latest Price", format="dollar"),
+    "amount": st.column_config.NumberColumn("Amount", format="dollar", width="small"),
+    "notes": "Notes",
+    "return": st.column_config.NumberColumn("Trade Return", format="percent"),
+    "market_return": st.column_config.NumberColumn("Market Return", format="percent"),
+    "tags": st.column_config.ListColumn("Tags", width="medium")
+}
 
 # aws vars
 S3_BUCKET = "pickwise-676206945006"
