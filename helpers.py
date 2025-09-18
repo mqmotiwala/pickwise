@@ -1,5 +1,4 @@
 import io
-import re
 import json
 import config as c 
 import pandas as pd
@@ -59,9 +58,7 @@ def save_trades(edited_trades):
         ContentType='application/json'
     )
 
-def generate_results(selected_tags):
-    trades = load_trades(selected_tags=selected_tags)
-
+def generate_results(trades):
     # get analysis start date based on earliest trade date
     ANALYSIS_START_DATE = min(
             dt.strptime(trade["date"], c.DATES_FORMAT) for trade in trades
@@ -302,3 +299,11 @@ def get_tags(edited_trades):
                 res.add(tag)
 
     return res
+
+def humanize_date(date_str):
+    """
+        accepts dates in YYYY-MM-DD format and returns a humanized version
+        example: 2025-09-18 --> Thursday, September 18, 2025
+    """
+    return dt.strptime(date_str, c.DATES_FORMAT).strftime(c.PREFERRED_UI_DATE_FORMAT_DATETIME)
+

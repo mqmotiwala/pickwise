@@ -41,13 +41,32 @@ st.subheader("Analyze Trades")
 tags = h.get_tags(edited_trades)
 pills_label_action = "Create" if len(tags) == 0 else "Choose"
 selected_tags = st.pills(
-    label = f"{pills_label_action} tags to selectively analyze trading strategies.",
+    label = f"{pills_label_action} tags to selectively analyze trading portfolios.",
     options = tags,
     selection_mode = "multi",
     default = None
 )
 
-res = h.generate_results(selected_tags)
+selected_trade = st.selectbox(
+    label="Or, select a single trade to review.",
+    options = trades,
+    index = None,
+    disabled = True if not selected_tags == [] else False,
+    format_func = lambda trade: f"{trade["ticker"]} on {h.humanize_date(trade["date"])}"
+)
+
+if selected_trade and not selected_tags:
+    selection = [selected_trade]
+else:
+    if selected_tags:
+        selection = [
+            trade for trade in trades
+            if trade.get("tags") and any(tag in trade["tags"] for tag in selected_tags)
+        ]
+    else:
+        selection = trades
+
+res = h.generate_results(selection)
 
 st.markdown("") # empty space
 metrics, trades_summary = h.get_metrics(res)
