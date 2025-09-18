@@ -5,12 +5,12 @@ import config as c
 import time
 
 st.set_page_config(
-    page_title="pickwise",
+    page_title="Pickwise",
     page_icon="📈",
     layout="wide"
 )
 
-st.subheader('Stock Picking vs. ETF Investing Portfolios Over Time')
+st.header('Pickwise -- Evaluate Stock Picks Against ETF Portfolios')
 
 st.subheader("Trades")
 st.text("""
