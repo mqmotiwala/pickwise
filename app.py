@@ -21,10 +21,20 @@ st.text("""
 """)
 
 trades = h.load_trades()
-df = pd.DataFrame(trades).assign(date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT))
+trades_df = pd.DataFrame(trades) \
+    .assign(
+        date=lambda d: pd.to_datetime(d["date"], 
+        format=c.DATES_FORMAT)
+    ) \
+    .sort_values(
+        by="date", 
+        ascending=False,
+        ignore_index=True
+    )
+
 try:
     edited_trades = st.data_editor(
-        df, 
+        trades_df, 
         num_rows="dynamic", 
         column_config=c.COLUMN_CONFIGS,
     )
@@ -71,7 +81,8 @@ except ValueError:
     if st.button("OK, I understand."):
         streamlit_js_eval(js_expressions="parent.window.location.reload()")
 
-    edited_trades = df
+    # allows the rest of the app to be rendered
+    edited_trades = trades_df
 
 st.divider()
 
@@ -120,7 +131,7 @@ for col, metric in zip(cols, metrics):
             )
 
 st.dataframe(
-    pd.DataFrame(trades_summary).style.applymap(h.color_vals, subset=["return", "market_return"]),
+    pd.DataFrame(trades_summary).sort_values(by="date", ascending=False, ignore_index=True).style.applymap(h.color_vals, subset=["return", "market_return"]),
     column_config=c.COLUMN_CONFIGS
 )
             
