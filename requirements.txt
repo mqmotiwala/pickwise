@@ -4,3 +4,4 @@ streamlit
 pandas
 yfinance
 matplotlib
+streamlit_js_eval
