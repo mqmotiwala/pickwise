@@ -1,7 +1,7 @@
-boto3
-dotenv
-streamlit
-pandas
-yfinance
-matplotlib
+boto3==1.37.37
+streamlit==1.50.0
+pandas==2.2.3
+yfinance==0.2.58
+matplotlib==3.10.1
 streamlit_js_eval
+dotenv
