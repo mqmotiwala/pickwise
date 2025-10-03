@@ -97,7 +97,7 @@ tags = h.get_tags(edited_trades)
 pills_label_action = "Create" if len(tags) == 0 else "Choose"
 selected_tags = st.pills(
     label = f"{pills_label_action} tags to selectively analyze trading portfolios.",
-    options = tags,
+    options = sorted(tags, key=str.lower),
     selection_mode = "multi",
     default = None
 )
