@@ -122,11 +122,21 @@ else:
 
 res = h.generate_results(selection)
 
-st.markdown("") # empty space
+css.empty_space()
+
 metrics, trades_summary = h.get_metrics(res)
 cols = st.columns(len(metrics))
 for col, metric in zip(cols, metrics):
      with col:
+            st.metric(
+                label = metric["label"], 
+                value = metric["value"], 
+                delta = metric.get("delta", None),
+                help = metric.get("help", None)
+            )
+
+with st.container(border=False, horizontal=True, gap="small", horizontal_alignment="center"):
+    for metric in metrics:
             st.metric(
                 label = metric["label"], 
                 value = metric["value"], 

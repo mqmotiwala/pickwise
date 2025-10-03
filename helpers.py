@@ -203,13 +203,6 @@ def plot_results(res):
 def get_metrics(res):
     metrics = []
 
-    # metric: number of trades
-    metrics.append({
-        "label": "Total Trades", 
-        "value": res["trades"].apply(len).sum(),
-        "help": "All trades are included except when filtered by tags."
-    })
-
     # calculate trades metadata
     trading_days = res[res["trades"].notna() & res["trades"].astype(bool)]
     latest_date = res.iloc[-1]
@@ -254,9 +247,17 @@ def get_metrics(res):
         "help": "**Losing trades**\n\n" + "\n\n".join(losers) if losers else "No losers! 🎉",
     })
 
-    # metric: winning percentage
-    # winning_percentage = (number_of_winners / len(tickers) * 100) if tickers else 0
-    # metrics.append({"label": "winning percentage", "value": f"{winning_percentage:.2f}%"})
+    # metric: success rate
+    total_trades = res["trades"].apply(len).sum()
+    winning_percentage = int(len(winners) / total_trades * 100) if total_trades else 0
+    metrics.append({"label": "Success Rate", "value": f"{winning_percentage}%"})
+
+    # metric: number of trades
+    metrics.append({
+        "label": "Total Trades", 
+        "value": total_trades,
+        "help": "All trades are included except when filters are applied."
+    })
 
     # metric: total invested
     metrics.append({"label": "Total Invested", "value": f"${total_invested:,.2f}"})
