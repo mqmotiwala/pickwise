@@ -5,6 +5,7 @@ import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib.ticker as mticker
 
 from curl_cffi import requests
 from datetime import datetime as dt
@@ -185,16 +186,17 @@ def plot_results(res):
                 ha='center'
             )
 
+
+    # axis formatting
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
+    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))  # Currency format
+    plt.xticks(rotation=45)
+
     # Formatting
-    plt.xlabel('Date')
     plt.ylabel('Portfolio Value ($)')
     plt.legend()
     plt.grid(True)
-
-    # Format x-axis dates
-    ax = plt.gca()
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
-    plt.xticks(rotation=45)
 
     return plt
 
