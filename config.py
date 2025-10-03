@@ -14,6 +14,7 @@ def env(key, default=None):
 
 # app styling
 st.set_page_config(layout="wide")
+PRIMARY_COLOR = "#4CAF50"
 
 # user preferences
 MARKET = "VTI"

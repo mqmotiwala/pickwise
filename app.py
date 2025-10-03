@@ -2,19 +2,23 @@ import streamlit as st
 import helpers as h
 import pandas as pd
 import config as c
+import css as css
 import time
 
 from streamlit_js_eval import streamlit_js_eval
 
 st.set_page_config(
     page_title="Pickwise",
-    page_icon="📈",
+    page_icon="🤑",
     layout="wide"
 )
 
-st.header('Pickwise -- Evaluate Stock Picks Against ETF Portfolios')
+css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+css.markdown("##### Evaluate stock picking portfolios against the market!")
 
-st.subheader("Trades")
+css.divider()
+
+css.header(css.underline("Trades"), lvl=3)
 st.text("""
     Configure trades to monitor here.  
     Tags can be used to run analyses on subsets of trades.
@@ -39,7 +43,7 @@ try:
         column_config=c.COLUMN_CONFIGS,
     )
 
-    if st.button("Sync to Cloud", icon=":material/save:"):
+    if st.button("Sync to Cloud", icon=":material/save:", type="primary"):
         valid, error_msg = h.validate_changes(edited_trades)
 
         if valid:
@@ -48,7 +52,7 @@ try:
             h.save_trades(edited_trades)
             st.rerun()
 except ValueError:
-    st.divider()
+    css.divider()
 
     st.warning(
         """
@@ -84,9 +88,9 @@ except ValueError:
     # allows the rest of the app to be rendered
     edited_trades = trades_df
 
-st.divider()
+css.divider()
 
-st.subheader("Analyze Trades")
+css.header(css.underline("Analyze Trades"), lvl=3)
 
 tags = h.get_tags(edited_trades)
 pills_label_action = "Create" if len(tags) == 0 else "Choose"
