@@ -19,7 +19,7 @@ with st.container(gap=None):
 
     css.divider()
 
-css.header(css.underline("Trades"), lvl=3)
+css.header(css.underline("Add Trades"), lvl=5)
 st.text("""
     Configure trades to monitor here.  
     Tags can be used to run analyses on subsets of trades.
@@ -91,7 +91,7 @@ except ValueError:
 
 css.divider()
 
-css.header(css.underline("Analyze Trades"), lvl=3)
+css.header(css.underline("Analyze Trades"), lvl=5)
 
 tags = h.get_tags(edited_trades)
 pills_label_action = "Create" if len(tags) == 0 else "Choose"
