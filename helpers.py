@@ -46,6 +46,9 @@ def save_trades(edited_trades):
     # to avoid this, force save empty tags as an empty array
     edited_trades["tags"] = edited_trades["tags"].apply(lambda x: [] if x is None else x)
 
+    # ensure tickers are uppercase strings
+    edited_trades['ticker'] = edited_trades['ticker'].astype(str).str.upper()
+
     # Convert DataFrame to JSON string using a buffer
     json_buffer = io.StringIO()
     edited_trades.to_json(json_buffer, orient="records", indent=4)
