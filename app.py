@@ -13,10 +13,11 @@ st.set_page_config(
     layout="wide"
 )
 
-css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
-css.markdown("##### Evaluate stock picking portfolios against the market!")
+with st.container(gap=None):
+    css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+    css.markdown("##### Evaluate stock picking portfolios against the market.")
 
-css.divider()
+    css.divider()
 
 css.header(css.underline("Trades"), lvl=3)
 st.text("""

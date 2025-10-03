@@ -249,8 +249,8 @@ def get_metrics(res):
 
     # metric: success rate
     total_trades = res["trades"].apply(len).sum()
-    winning_percentage = int(len(winners) / total_trades * 100) if total_trades else 0
-    metrics.append({"label": "Success Rate", "value": f"{winning_percentage}%"})
+    winning_percentage = len(winners) / total_trades * 100 if total_trades else 0
+    metrics.append({"label": "Success Rate", "value": f"{winning_percentage:.0f}%"})
 
     # metric: number of trades
     metrics.append({
@@ -260,7 +260,7 @@ def get_metrics(res):
     })
 
     # metric: total invested
-    metrics.append({"label": "Total Invested", "value": f"${total_invested:,.2f}"})
+    metrics.append({"label": "Total Invested", "value": f"${total_invested:,.0f}"})
 
     # metrics: final portfolio values
     final_stock_value = res[c.STOCK_PORTFOLIO_COL_NAME].iloc[-1]
@@ -271,8 +271,8 @@ def get_metrics(res):
     delta_pct = (delta / total_invested * 100) if total_invested != 0 else 0
     metrics.append({
         "label": f"{c.STOCK_PORTFOLIO_LABEL} Value",
-        "value": f"${final_stock_value:,.2f}",
-        "delta": f"{sign}${abs(delta):,.2f} | {sign}{abs(delta_pct):.2f}%"
+        "value": f"${final_stock_value:,.0f}",
+        "delta": f"{sign}${abs(delta):,.0f} | {sign}{abs(delta_pct):.2f}%"
     })
 
     sign = "" if final_market_value - total_invested >= 0 else "-"
@@ -280,8 +280,8 @@ def get_metrics(res):
     delta_pct = (delta / total_invested * 100) if total_invested != 0 else 0
     metrics.append({
         "label": f"{c.MARKET_PORTFOLIO_LABEL} Value", 
-        "value": f"${final_market_value:,.2f}",
-        "delta": f"{sign}${abs(delta):,.2f} | {sign}{abs(delta_pct):.2f}%"
+        "value": f"${final_market_value:,.0f}",
+        "delta": f"{sign}${abs(delta):,.0f} | {sign}{abs(delta_pct):.2f}%"
     })
     
     return metrics, trades_summary
