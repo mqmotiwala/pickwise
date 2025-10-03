@@ -4,6 +4,7 @@ import config as c
 import pandas as pd
 import yfinance as yf
 import matplotlib.pyplot as plt
+import matplotlib.dates as mdates
 
 from curl_cffi import requests
 from datetime import datetime as dt
@@ -172,7 +173,6 @@ def plot_results(res):
     # Add annotations for trades
     for i, row in res.iterrows():
         if row.get("trades"):
-            # Format annotation text from trade notes or tickers
             notes = ", ".join([f"{t['ticker']}" for t in row["trades"]])
             y_pos = row["portfolio_value"]
             plt.annotate(
@@ -190,7 +190,12 @@ def plot_results(res):
     plt.ylabel('Portfolio Value ($)')
     plt.legend()
     plt.grid(True)
-            
+
+    # Format x-axis dates
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
+    plt.xticks(rotation=45)
+
     return plt
 
 def get_metrics(res):
