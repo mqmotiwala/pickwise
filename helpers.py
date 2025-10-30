@@ -107,6 +107,9 @@ def generate_results(trades):
     # value of market shares on a given date
     res[c.MARKET_PORTFOLIO_COL_NAME] = res["market_shares"] * res[c.MARKET]
 
+    # RAM reduction
+    del data
+
     return res
 
 def color_vals(val):

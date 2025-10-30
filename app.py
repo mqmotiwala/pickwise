@@ -4,6 +4,7 @@ import pandas as pd
 import config as c
 import css as css
 import time
+import gc
 
 from streamlit_js_eval import streamlit_js_eval
 
@@ -149,3 +150,6 @@ st.download_button(
     mime="text/csv",
     icon=":material/download:",
 )
+
+# run garbage collection to free RAM
+gc.collect()
