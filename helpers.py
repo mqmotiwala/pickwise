@@ -229,19 +229,13 @@ def generate_results(tagged_trades):
     # group trades by date 
     # then add a trades column containing list of trades on a given date
     trades_map = generate_trades_map(tagged_trades)
-    res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
 
-    # creates a shares column containing a dict of shares in portfolio upto that date
-    # the size of dict increases as more trades are made
-    # also creates a market_shares column containing number of market shares upto that date
-    # this too increases as more trades are made
+    # track trades col in res df for trades executed on given date
+    # useful for debugging, but exclude by default
+    # res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
+
+    # Compute cumulative portfolio and market values in a single pass.
     res = calculate_cumulative_shares(res)
-
-    # sum of portfolio value for all trades on a given date
-    res[c.STOCK_PORTFOLIO_COL_NAME] = res.apply(calculate_portfolio_value, axis=1)
-
-    # value of market shares on a given date
-    res[c.MARKET_PORTFOLIO_COL_NAME] = res["market_shares"] * res[c.MARKET]
 
     return res
 
@@ -251,46 +245,49 @@ def color_vals(val):
     return f"color: {color}"
 
 def calculate_cumulative_shares(df):
-    portfolio = {}  # Running portfolio dict
-    cumulative_shares = []
-    market_shares = []
+    portfolio = {}  # Running portfolio holdings by ticker.
+    ticker_prices = {}  # Cached numpy views for fast per-row price reads.
+    market_prices = df[c.MARKET].to_numpy(copy=False)
+    trades_by_row = df["trades"].to_numpy(copy=False)
 
-    # assume starting with $0 in market
-    # this increases as trades are made
-    market_shares_bought = 0
-    for _, row in df.iterrows():
-        # Start with a copy of the previous day's portfolio
-        current_portfolio = portfolio.copy()
+    market_shares_bought = 0.0
+    portfolio_values = []
+    market_values = []
 
-        for trade in row.get('trades', []):
-            ticker = trade['ticker']
-            amount = trade['amount']
+    for i, trades in enumerate(trades_by_row):
+        market_price = market_prices[i]
 
-            ticker_price = row.get(ticker)
-            market_price = row.get(c.MARKET)
+        for trade in trades:
+            ticker = trade["ticker"]
+            amount = trade["amount"]
 
-            if ticker_price and ticker_price > 0 and market_price and market_price > 0:
-                shares_bought = amount / ticker_price
-                current_portfolio[ticker] = current_portfolio.get(ticker, 0) + shares_bought
+            if ticker not in ticker_prices and ticker in df.columns:
+                ticker_prices[ticker] = df[ticker].to_numpy(copy=False)
+            ticker_series = ticker_prices.get(ticker)
+            ticker_price = ticker_series[i] if ticker_series is not None else None
 
+            if (
+                pd.notna(ticker_price)
+                and ticker_price > 0
+                and pd.notna(market_price)
+                and market_price > 0
+            ):
+                portfolio[ticker] = portfolio.get(ticker, 0.0) + (amount / ticker_price)
                 market_shares_bought += amount / market_price
-        
-        cumulative_shares.append(current_portfolio)
-        market_shares.append(market_shares_bought)
-        
-        portfolio = current_portfolio  # Update for next iteration
 
-    df['shares'] = cumulative_shares
-    df['market_shares'] = market_shares
+        portfolio_value = 0.0
+        for ticker, qty in portfolio.items():
+            price = ticker_prices[ticker][i]
+            if pd.notna(price):
+                portfolio_value += qty * price
+
+        portfolio_values.append(portfolio_value)
+        market_values.append(market_shares_bought * market_price)
+
+    df[c.STOCK_PORTFOLIO_COL_NAME] = portfolio_values
+    df[c.MARKET_PORTFOLIO_COL_NAME] = market_values
 
     return df
-
-def calculate_portfolio_value(row):
-    sum = 0
-    for ticker, qty in row.get('shares', {}).items():
-        sum += qty * row.get(ticker, 0)
-            
-    return sum
 
 def generate_trades_map(trades):
     trades_map = {}
