@@ -217,36 +217,18 @@ def save_trades(edited_trades):
     del st.session_state["ticker_data"]
     st.rerun()
 
-def generate_results(trades):
-    # get analysis start date based on earliest trade date
-    ANALYSIS_START_DATE = min(
-            dt.strptime(trade["date"], c.DATES_FORMAT) for trade in trades
-        )- td(days=c.NUM_DAYS_PRECEDING_ANALYSIS)
+def generate_results(tagged_trades):
+    res = st.session_state["ticker_data"].copy()
     
-    # generate a df with all dates since ANALYSIS_START_DATE
-    # this is explicitly required to ensure res holds all dates, incl. non-trading dates
-    # which are excluded by default by yfinance API 
-    date_range = pd.date_range(
-        start=ANALYSIS_START_DATE, 
-        end=dt.now().date(),
-        freq="D")
-
-    res = pd.DataFrame(date_range, columns=["Date"])
-
-    # get STOCK and MARKET ticker values for all analysis dates
-    tickers = list(set(trade["ticker"] for trade in trades)) + [c.MARKET]
-    data = yf.download(tickers, start=ANALYSIS_START_DATE, end=dt.now().date() + td(days=1), interval="1d", session=session)["Close"]
-    res = res.merge(data, on="Date", how="left")
-
-    # reset index to make Date a column
-    res.reset_index(inplace=True)
-    
-    # forward fill values for dates where price data was not available
-    res = res.ffill()
+    # trim res to only include dates from 30 days before the earliest trade to today
+    if tagged_trades:
+        earliest_date = min(dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in tagged_trades) - td(days=c.NUM_DAYS_PRECEDING_ANALYSIS)
+        latest_date = dt.today().date()
+        res = res[(res["Date"].dt.date >= earliest_date) & (res["Date"].dt.date <= latest_date)]
 
     # group trades by date 
     # then add a trades column containing list of trades on a given date
-    trades_map = generate_trades_map(trades)
+    trades_map = generate_trades_map(tagged_trades)
     res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
 
     # creates a shares column containing a dict of shares in portfolio upto that date
@@ -260,9 +242,6 @@ def generate_results(trades):
 
     # value of market shares on a given date
     res[c.MARKET_PORTFOLIO_COL_NAME] = res["market_shares"] * res[c.MARKET]
-
-    # RAM reduction
-    del data
 
     return res
 
@@ -324,16 +303,16 @@ def generate_trades_map(trades):
     return trades_map
 
 def plot_results(res):
-    plt.figure(figsize=(12, 6))
-    plt.plot(res['Date'], res["portfolio_value"], label=c.STOCK_PORTFOLIO_LABEL)
-    plt.plot(res['Date'], res["market_value"], label=c.MARKET_PORTFOLIO_LABEL)
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(res['Date'], res["portfolio_value"], label=c.STOCK_PORTFOLIO_LABEL)
+    ax.plot(res['Date'], res["market_value"], label=c.MARKET_PORTFOLIO_LABEL)
 
     # Add annotations for trades
     for i, row in res.iterrows():
         if row.get("trades"):
             notes = ", ".join([f"{t['ticker']}" for t in row["trades"]])
             y_pos = row["portfolio_value"]
-            plt.annotate(
+            ax.annotate(
                 notes,
                 xy=(row["Date"], y_pos),
                 xytext=(0, 10),
@@ -345,17 +324,16 @@ def plot_results(res):
 
 
     # axis formatting
-    ax = plt.gca()
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
     ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))  # Currency format
-    plt.xticks(rotation=45)
+    plt.setp(ax.get_xticklabels(), rotation=45)
 
     # Formatting
-    plt.ylabel('Portfolio Value ($)')
-    plt.legend()
-    plt.grid(True)
+    ax.set_ylabel('Portfolio Value ($)')
+    ax.legend()
+    ax.grid(True)
 
-    return plt
+    return fig
 
 def get_metrics(res):
     metrics = []
@@ -373,7 +351,7 @@ def get_metrics(res):
         for trade in row["trades"]:
             total_invested += trade["amount"]
 
-            trade_id = f"{trade["date"]} | {trade["ticker"]}"
+            trade_id = f"{trade['date']} | {trade['ticker']}"
             purchase_price = row[trade["ticker"]]
             latest_price = latest_date[trade["ticker"]]
             latest_market_price = latest_date[c.MARKET]

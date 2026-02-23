@@ -5,6 +5,7 @@ import config as c
 import css as css
 import time
 import gc
+import matplotlib.pyplot as plt
 
 from streamlit_js_eval import streamlit_js_eval
 
@@ -21,7 +22,6 @@ st.text("""
 """)
 
 h.load_app_state()
-st.write(st.session_state.ticker_data)
 
 trades_df = pd.DataFrame(st.session_state.get("trades", [])).assign(
         date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT)
@@ -102,9 +102,10 @@ if selected_tag:
             trade for trade in st.session_state.get("trades", [])
             if selected_tag in trade.get("tags", [])
         ]
-    
+else:
+    tagged_trades = st.session_state.get("trades", [])
 
-res = h.generate_results(selection)
+res = h.generate_results(tagged_trades)
 
 css.empty_space()
 
@@ -124,7 +125,9 @@ st.dataframe(
 )
             
 st.markdown("") # empty space
-st.pyplot(h.plot_results(res))
+fig = h.plot_results(res)
+st.pyplot(fig, clear_figure=True)
+plt.close(fig)
 st.download_button(
     label="Download CSV",
     data=res.to_csv(index=False).encode("utf-8"),
