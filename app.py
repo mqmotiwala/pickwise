@@ -5,19 +5,14 @@ import config as c
 import css as css
 import time
 import gc
+import matplotlib.pyplot as plt
 
 from streamlit_js_eval import streamlit_js_eval
 
-st.set_page_config(
-    page_title="Pickwise",
-    page_icon="🤑",
-    layout="wide"
-)
-
+st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
 with st.container(gap=None):
     css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
     css.markdown("##### Evaluate stock picking portfolios against the market.")
-
     css.divider()
 
 css.header(css.underline("Add Trades"), lvl=5)
@@ -26,13 +21,11 @@ st.text("""
     Tags can be used to run analyses on subsets of trades.
 """)
 
-trades = h.load_trades()
-trades_df = pd.DataFrame(trades) \
-    .assign(
-        date=lambda d: pd.to_datetime(d["date"], 
-        format=c.DATES_FORMAT)
-    ) \
-    .sort_values(
+h.load_app_state()
+
+trades_df = pd.DataFrame(st.session_state.get("trades", [])).assign(
+        date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT)
+    ).sort_values(
         by="date", 
         ascending=False,
         ignore_index=True
@@ -51,8 +44,9 @@ try:
         if valid:
             st.error(f"Save rejected. {error_msg}", icon="🚨")
         else:
+            st.toast("Saved changes!", icon="💾")
             h.save_trades(edited_trades)
-            st.rerun()
+
 except ValueError:
     css.divider()
 
@@ -96,33 +90,22 @@ css.header(css.underline("Analyze Trades"), lvl=5)
 
 tags = h.get_tags(edited_trades)
 pills_label_action = "Create" if len(tags) == 0 else "Choose"
-selected_tags = st.pills(
+selected_tag = st.pills(
     label = f"{pills_label_action} tags to selectively analyze trading portfolios.",
     options = sorted(tags, key=str.lower),
-    selection_mode = "multi",
+    selection_mode = "single",
     default = None
 )
 
-selected_trade = st.selectbox(
-    label="Or, select a single trade to review.",
-    options = trades,
-    index = None,
-    disabled = True if not selected_tags == [] else False,
-    format_func = lambda trade: f"{trade["ticker"]} on {h.humanize_date(trade["date"])}"
-)
-
-if selected_trade and not selected_tags:
-    selection = [selected_trade]
-else:
-    if selected_tags:
-        selection = [
-            trade for trade in trades
-            if trade.get("tags") and any(tag in trade["tags"] for tag in selected_tags)
+if selected_tag:
+    tagged_trades = [
+            trade for trade in st.session_state.get("trades", [])
+            if selected_tag in trade.get("tags", [])
         ]
-    else:
-        selection = trades
+else:
+    tagged_trades = st.session_state.get("trades", [])
 
-res = h.generate_results(selection)
+res = h.generate_results(tagged_trades)
 
 css.empty_space()
 
@@ -142,7 +125,9 @@ st.dataframe(
 )
             
 st.markdown("") # empty space
-st.pyplot(h.plot_results(res))
+fig = h.plot_results(res)
+st.pyplot(fig, clear_figure=True)
+plt.close(fig)
 st.download_button(
     label="Download CSV",
     data=res.to_csv(index=False).encode("utf-8"),
