@@ -3,6 +3,7 @@ import json
 import config as c 
 import pandas as pd
 import yfinance as yf
+import streamlit as st
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import matplotlib.ticker as mticker
@@ -16,26 +17,174 @@ from datetime import timedelta as td
 # which, without this session, is set to python-requests
 session = requests.Session(impersonate="chrome")
 
-def load_trades(selected_tags=None):
-    """
-        Load trades from trades.json object in S3.
+def load_app_state():
+    """ load trades & stock data into session state. """
 
-        If selected_tags is provided, only return matching trades
-        else, return all 
-    """
+    def _download_close(tickers, start_date):
+        """ Pull daily close prices only for required date windows. """
+        if not tickers or start_date > today:
+            return pd.DataFrame()
+        close = yf.download(
+            sorted(tickers),
+            start=start_date,
+            end=today + td(days=1),
+            interval="1d",
+            session=session,
+            progress=False,
+        )["Close"]
+        if close.empty:
+            return pd.DataFrame()
+        if isinstance(close, pd.Series):
+            close = close.to_frame(name=sorted(tickers)[0])
+        close = close.reset_index()
+        if "Date" not in close.columns:
+            close = close.rename(columns={close.columns[0]: "Date"})
+        close["Date"] = pd.to_datetime(close["Date"]).dt.normalize()
+        return close
 
-    response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TRADES_JSON_PATH)
-    trades_str = response['Body'].read().decode('utf-8')
-    trades = json.loads(trades_str)
+    if "trades" not in st.session_state:
+        response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TRADES_JSON_PATH)
+        trades_str = response['Body'].read().decode('utf-8')
+        st.session_state["trades"] = json.loads(trades_str)
+        st.session_state["tickers"] = set(trade["ticker"] for trade in st.session_state["trades"])
 
-    
-    if selected_tags:
-        return [
-            trade for trade in trades
-            if trade.get("tags") and any(tag in trade["tags"] for tag in selected_tags)
-        ]
-    else:
-        return trades
+        st.toast(f"""Trades history loaded!  
+            Monitoring {len(st.session_state['trades'])} trades across {len(st.session_state['tickers'])} tickers.
+        """)
+
+    if "ticker_data" not in st.session_state:
+        try:
+            ticker_data_obj = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TICKER_DATA_PATH)
+            st.session_state["ticker_data"] = pd.read_parquet(io.BytesIO(ticker_data_obj['Body'].read()))
+        except c.s3.exceptions.NoSuchKey:
+            st.session_state["ticker_data"] = pd.DataFrame()
+
+        # Work on a copy so state can be updated atomically after refresh logic.
+        ticker_data = st.session_state["ticker_data"].copy()
+        required_tickers = st.session_state.get("tickers", set())
+        required_tickers.add(c.MARKET)  # Always ensure market data is included for comparisons.
+        today = dt.now().date()
+
+        # Normalize legacy parquet shapes where Date was saved as index.
+        if not ticker_data.empty and "Date" not in ticker_data.columns:
+            ticker_data = ticker_data.reset_index()
+            if "Date" not in ticker_data.columns and "index" in ticker_data.columns:
+                ticker_data = ticker_data.rename(columns={"index": "Date"})
+
+        # Derive current coverage window and known ticker columns.
+        if "Date" in ticker_data.columns and not ticker_data.empty:
+            ticker_data["Date"] = pd.to_datetime(ticker_data["Date"]).dt.normalize()
+            latest_date = ticker_data["Date"].max().date()
+            earliest_date = ticker_data["Date"].min().date()
+            existing_tickers = {col for col in ticker_data.columns if col != "Date"}
+        else:
+            latest_date = None
+            earliest_date = None
+            existing_tickers = set()
+            if ticker_data.empty:
+                ticker_data = pd.DataFrame(columns=["Date"])
+
+        # Figure out what needs to be fetched:
+        # 1) tickers that are present in trades but missing from stored parquet columns
+        # 2) newer dates after the latest cached row
+        missing_tickers = required_tickers - existing_tickers
+        needs_date_refresh = latest_date is None or latest_date < today
+
+        if missing_tickers or needs_date_refresh:
+            toast_lines = ["Refreshing stock data for..."]
+            if missing_tickers:
+                toast_lines.append(f"{len(missing_tickers)} new tickers")
+            if needs_date_refresh:
+                toast_lines.append(
+                    f"new data since {latest_date or earliest_date or 'latest trade date.'}"
+                )
+            toast_msg = "  \n".join(toast_lines)
+            st.toast(toast_msg)
+        else:
+            st.toast("Stock data loaded.")
+
+        updated = False
+        # Backfill missing ticker columns across the full available date range so
+        # all symbols share the same historical timeline in one DataFrame.
+        if missing_tickers:
+            if earliest_date is not None:
+                missing_start = earliest_date
+            else:
+                # If no cached data exists yet, infer start from earliest trade date.
+                trades = st.session_state.get("trades", [])
+                if trades:
+                    missing_start = min(
+                        dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in trades
+                    )
+                else:
+                    # No trades means no historical backfill is needed.
+                    missing_start = today
+
+            missing_data = _download_close(missing_tickers, missing_start)
+            if not missing_data.empty:
+                # Outer merge preserves existing rows and adds new ticker columns.
+                ticker_data = ticker_data.merge(missing_data, on="Date", how="outer")
+                updated = True
+
+        # Append only dates newer than the last cached date for all required tickers.
+        if needs_date_refresh and required_tickers:
+            if latest_date is None:
+                # Cold start: build initial history from earliest trade date.
+                trades = st.session_state.get("trades", [])
+                if trades:
+                    refresh_start = min(
+                        dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in trades
+                    )
+                else:
+                    refresh_start = today
+            else:
+                # Incremental refresh starts the day after the most recent cached date.
+                refresh_start = latest_date + td(days=1)
+
+            refresh_data = _download_close(required_tickers, refresh_start)
+            if not refresh_data.empty:
+                # Ensure schema compatibility before concat when new columns appear.
+                for col in refresh_data.columns:
+                    if col != "Date" and col not in ticker_data.columns:
+                        ticker_data[col] = pd.NA
+                ticker_data = pd.concat([ticker_data, refresh_data], ignore_index=True, sort=False)
+                updated = True
+
+        # Clean up stale tickers that are no longer in trades and forward-fill any missing values
+        if "Date" in ticker_data.columns and not ticker_data.empty:
+            ticker_data["Date"] = pd.to_datetime(ticker_data["Date"]).dt.normalize()
+            ticker_data = ticker_data.sort_values("Date")
+
+            stale_tickers = [
+                col for col in ticker_data.columns if col != "Date" and col not in required_tickers
+            ]
+            if stale_tickers:
+                ticker_data = ticker_data.drop(columns=stale_tickers)
+                updated = True
+
+            price_cols = [col for col in ticker_data.columns if col != "Date"]
+            if price_cols and ticker_data[price_cols].isna().values.any():
+                ticker_data[price_cols] = ticker_data[price_cols].ffill()
+                updated = True
+
+        # Persist only when there are changes: normalize dates, keep latest row per day,
+        # then write both session state and parquet in S3.
+        if updated:
+            ticker_data["Date"] = pd.to_datetime(ticker_data["Date"]).dt.normalize()
+            ticker_data = ticker_data.sort_values("Date").drop_duplicates(subset=["Date"], keep="last")
+            ticker_data = ticker_data.reset_index(drop=True)
+            st.session_state["ticker_data"] = ticker_data
+
+            st.toast("Stock data refreshed and up to date.")
+
+            buffer = io.BytesIO()
+            ticker_data.to_parquet(buffer, index=False)
+            c.s3.put_object(
+                Bucket=c.S3_BUCKET,
+                Key=c.TICKER_DATA_PATH,
+                Body=buffer.getvalue(),
+                ContentType='application/octet-stream'
+            )
 
 def save_trades(edited_trades):
     """Save edited trades DataFrame to S3 as JSON."""
@@ -62,6 +211,11 @@ def save_trades(edited_trades):
         Body=json_buffer.getvalue(),
         ContentType='application/json'
     )
+
+    # Update session state after successful save
+    del st.session_state["trades"]
+    del st.session_state["ticker_data"]
+    st.rerun()
 
 def generate_results(trades):
     # get analysis start date based on earliest trade date
