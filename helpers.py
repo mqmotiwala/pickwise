@@ -231,8 +231,7 @@ def generate_results(tagged_trades):
     trades_map = generate_trades_map(tagged_trades)
 
     # track trades col in res df for trades executed on given date
-    # useful for debugging, but exclude by default
-    # res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
+    res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
 
     # Compute cumulative portfolio and market values in a single pass.
     res = calculate_cumulative_shares(res)
