@@ -47,6 +47,7 @@ def load_app_state():
         trades_str = response['Body'].read().decode('utf-8')
         st.session_state["trades"] = json.loads(trades_str)
         st.session_state["tickers"] = set(trade["ticker"] for trade in st.session_state["trades"])
+        st.session_state["tickers_by_tags"] = {tag: set([trade["ticker"] for trade in st.session_state["trades"] if tag in trade.get("tags", [])]) for tag in set(tag for trade in st.session_state["trades"] for tag in trade.get("tags", []))}
 
         st.toast(f"""Trading history loaded!  
             Monitoring {len(st.session_state['trades'])} trades across {len(st.session_state['tickers'])} tickers.

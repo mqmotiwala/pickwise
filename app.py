@@ -97,13 +97,27 @@ selected_tag = st.pills(
     default = None
 )
 
-if selected_tag:
+selected_ticker = st.selectbox(
+    label="Optionally, filter for a specific ticker traded within selected tag.",
+    options = sorted(st.session_state.get("tickers_by_tags", {}).get(selected_tag, [])),
+    index = None,
+)
+
+if selected_ticker: 
+    # if a ticker is selected, filter just for that ticker's trades
     tagged_trades = [
             trade for trade in st.session_state.get("trades", [])
-            if selected_tag in trade.get("tags", [])
+            if trade.get("ticker", None) == selected_ticker
         ]
-else:
-    tagged_trades = st.session_state.get("trades", [])
+else:  
+    # otherwise, filter for all trades with the selected tag (or all trades if no tag is selected)
+    if selected_tag:
+        tagged_trades = [
+                trade for trade in st.session_state.get("trades", [])
+                if selected_tag in trade.get("tags", [])
+            ]
+    else:
+        tagged_trades = st.session_state.get("trades", [])
 
 res = h.generate_results(tagged_trades)
 
