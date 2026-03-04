@@ -48,7 +48,7 @@ def load_app_state():
         st.session_state["trades"] = json.loads(trades_str)
         st.session_state["tickers"] = set(trade["ticker"] for trade in st.session_state["trades"])
 
-        st.toast(f"""Trades history loaded!  
+        st.toast(f"""Trading history loaded!  
             Monitoring {len(st.session_state['trades'])} trades across {len(st.session_state['tickers'])} tickers.
         """)
 
@@ -101,7 +101,7 @@ def load_app_state():
             toast_msg = "  \n".join(toast_lines)
             st.toast(toast_msg)
         else:
-            st.toast("Stock data loaded.")
+            st.toast("Cached stock data loaded. No refresh needed.")
 
         updated = False
         # Backfill missing ticker columns across the full available date range so
@@ -150,7 +150,7 @@ def load_app_state():
                 ticker_data = pd.concat([ticker_data, refresh_data], ignore_index=True, sort=False)
                 updated = True
 
-        # Clean up stale tickers that are no longer in trades and forward-fill any missing values
+        # Clean up stale tickers that are no longer in trades.
         if "Date" in ticker_data.columns and not ticker_data.empty:
             ticker_data["Date"] = pd.to_datetime(ticker_data["Date"]).dt.normalize()
             ticker_data = ticker_data.sort_values("Date")
@@ -162,11 +162,6 @@ def load_app_state():
                 ticker_data = ticker_data.drop(columns=stale_tickers)
                 updated = True
 
-            price_cols = [col for col in ticker_data.columns if col != "Date"]
-            if price_cols and ticker_data[price_cols].isna().values.any():
-                ticker_data[price_cols] = ticker_data[price_cols].ffill()
-                updated = True
-
         # Persist only when there are changes: normalize dates, keep latest row per day,
         # then write both session state and parquet in S3.
         if updated:
@@ -175,10 +170,13 @@ def load_app_state():
             ticker_data = ticker_data.reset_index(drop=True)
             st.session_state["ticker_data"] = ticker_data
 
-            st.toast("Stock data refreshed and up to date.")
+            st.toast("Cached stock data updated.")
 
             buffer = io.BytesIO()
-            ticker_data.to_parquet(buffer, index=False)
+
+            # only cache data up to previous day 
+            # this avoids writing non-final ticker data for the current day; for when app is used intraday before close
+            ticker_data[ticker_data["Date"].dt.date < today].to_parquet(buffer, index=False) 
             c.s3.put_object(
                 Bucket=c.S3_BUCKET,
                 Key=c.TICKER_DATA_PATH,
@@ -225,6 +223,11 @@ def generate_results(tagged_trades):
         earliest_date = min(dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in tagged_trades) - td(days=c.NUM_DAYS_PRECEDING_ANALYSIS)
         latest_date = dt.today().date()
         res = res[(res["Date"].dt.date >= earliest_date) & (res["Date"].dt.date <= latest_date)]
+
+    # Keep persisted cache raw; apply fill only on analysis output for chart continuity.
+    price_cols = [col for col in res.columns if col != "Date"]
+    if price_cols and res[price_cols].isna().values.any():
+        res[price_cols] = res[price_cols].ffill()
 
     # group trades by date 
     # then add a trades column containing list of trades on a given date
