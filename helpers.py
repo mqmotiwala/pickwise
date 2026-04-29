@@ -318,8 +318,8 @@ def plot_results(res):
                 xytext=(0, 10),
                 textcoords="offset points",
                 fontsize=8,
-                arrowprops=dict(arrowstyle="->", color="gray"),
-                ha='center'
+                arrowprops=dict(arrowstyle="->", color="gray", relpos=(1, 0)),
+                ha='right'
             )
 
 
