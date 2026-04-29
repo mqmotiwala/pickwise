@@ -254,8 +254,10 @@ def calculate_cumulative_shares(df):
     trades_by_row = df["trades"].to_numpy(copy=False)
 
     market_shares_bought = 0.0
+    total_invested = 0.0
     portfolio_values = []
     market_values = []
+    invested_values = []
 
     for i, trades in enumerate(trades_by_row):
         market_price = market_prices[i]
@@ -277,6 +279,7 @@ def calculate_cumulative_shares(df):
             ):
                 portfolio[ticker] = portfolio.get(ticker, 0.0) + (amount / ticker_price)
                 market_shares_bought += amount / market_price
+                total_invested += amount
 
         portfolio_value = 0.0
         for ticker, qty in portfolio.items():
@@ -286,9 +289,11 @@ def calculate_cumulative_shares(df):
 
         portfolio_values.append(portfolio_value)
         market_values.append(market_shares_bought * market_price)
+        invested_values.append(total_invested)
 
     df[c.STOCK_PORTFOLIO_COL_NAME] = portfolio_values
     df[c.MARKET_PORTFOLIO_COL_NAME] = market_values
+    df["total_invested"] = invested_values
 
     return df
 
@@ -302,16 +307,28 @@ def generate_trades_map(trades):
 
     return trades_map
 
-def plot_results(res):
+def plot_results(res, show_as_pct=False):
     fig, ax = plt.subplots(figsize=(12, 6))
-    ax.plot(res['Date'], res["portfolio_value"], label=c.STOCK_PORTFOLIO_LABEL)
-    ax.plot(res['Date'], res["market_value"], label=c.MARKET_PORTFOLIO_LABEL)
+
+    portfolio = res["portfolio_value"]
+    market = res["market_value"]
+
+    if show_as_pct:
+        invested = res["total_invested"]
+        portfolio = portfolio.where(invested > 0, 0.0)
+        market = market.where(invested > 0, 0.0)
+        invested = invested.replace(0, 1)  # avoid division by zero; numerator is already 0
+        portfolio = (portfolio - res["total_invested"]) / invested * 100
+        market = (market - res["total_invested"]) / invested * 100
+
+    ax.plot(res['Date'], portfolio, label=c.STOCK_PORTFOLIO_LABEL)
+    ax.plot(res['Date'], market, label=c.MARKET_PORTFOLIO_LABEL)
 
     # Add annotations for trades
     for i, row in res.iterrows():
         if row.get("trades"):
             notes = ", ".join([f"{t['ticker']}" for t in row["trades"]])
-            y_pos = row["portfolio_value"]
+            y_pos = portfolio.loc[i]
             ax.annotate(
                 notes,
                 xy=(row["Date"], y_pos),
@@ -325,11 +342,15 @@ def plot_results(res):
 
     # axis formatting
     ax.xaxis.set_major_formatter(mdates.DateFormatter('%b %d, %Y'))
-    ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))  # Currency format
+    if show_as_pct:
+        ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('{x:,.1f}%'))
+        ax.set_ylabel('Return (%)')
+    else:
+        ax.yaxis.set_major_formatter(mticker.StrMethodFormatter('${x:,.0f}'))
+        ax.set_ylabel('Portfolio Value ($)')
     plt.setp(ax.get_xticklabels(), rotation=45)
 
     # Formatting
-    ax.set_ylabel('Portfolio Value ($)')
     ax.legend()
     ax.grid(True)
 
