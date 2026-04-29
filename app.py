@@ -8,8 +8,12 @@ import gc
 import matplotlib.pyplot as plt
 
 from streamlit_js_eval import streamlit_js_eval
+from auth import require_login
 
 st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
+
+require_login()
+
 with st.container(gap=None):
     css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
     css.markdown("##### Evaluate stock picking portfolios against the market.")
