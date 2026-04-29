@@ -143,7 +143,8 @@ st.dataframe(
 )
             
 st.markdown("") # empty space
-fig = h.plot_results(res)
+show_as_pct = st.toggle("Show as % return", value=False)
+fig = h.plot_results(res, show_as_pct=show_as_pct)
 st.pyplot(fig, clear_figure=True)
 plt.close(fig)
 st.download_button(
