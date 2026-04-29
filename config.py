@@ -3,6 +3,7 @@ import boto3
 import streamlit as st
 
 from dotenv import load_dotenv, find_dotenv
+from pushover import Pushover
 
 # load environment variables from .env file
 load_dotenv(find_dotenv())
@@ -13,7 +14,6 @@ def env(key, default=None):
     return var
 
 # app styling
-st.set_page_config(layout="wide")
 PRIMARY_COLOR = "#4CAF50"
 
 # user preferences
@@ -65,3 +65,9 @@ s3 = boto3.client(
     aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
     region_name=AWS_REGION
 )
+
+# auth
+APP_PASSWORD = env("APP_PASSWORD")
+
+# Pushover client
+po = Pushover(user_token=env("PUSHOVER_USER_TOKEN"), app_token=env("PUSHOVER_APP_TOKEN"), log_token=env("PUSHOVER_LOG_TOKEN"))
