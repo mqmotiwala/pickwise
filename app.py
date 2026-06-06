@@ -8,18 +8,18 @@ import time
 import gc
 import matplotlib.pyplot as plt
 
+from landing import show_landing
 from streamlit_js_eval import streamlit_js_eval
-
-st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
 
 # gate the app behind Google sign-in
 if "auth" not in st.session_state:
-    with st.container(gap=None):
-        css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
-        css.markdown("##### Evaluate stock picking portfolios against the market.")
-        css.markdown("###### Sign in to continue.")
-    a.get_auth(unique_key=1)
+    # centered layout suits the landing; set inside the branch so Streamlit
+    # transitions centered -> wide more seamlessly once logged in
+    st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="centered")
+    show_landing()
     st.stop()
+
+st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
 
 with st.container(gap=None):
     with st.container(horizontal=True, horizontal_alignment="right"):

@@ -49,6 +49,7 @@ DEFAULT_TRADES = [
 TRADES_COLUMNS = ["ticker", "date", "amount", "notes", "tags"]
 
 # UI vars
+ASSETS_PATH = "assets"
 PREFERRED_UI_DATE_FORMAT_MOMENTJS = "dddd, MMMM DD, YYYY"
 PREFERRED_UI_DATE_FORMAT_DATETIME = "%A, %B %d, %Y"
 STOCK_PORTFOLIO_LABEL = 'Stock Picking Portfolio'
