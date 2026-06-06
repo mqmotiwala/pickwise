@@ -3,19 +3,29 @@ import helpers as h
 import pandas as pd
 import config as c
 import css as css
+import auth as a
 import time
 import gc
 import matplotlib.pyplot as plt
 
 from streamlit_js_eval import streamlit_js_eval
-from auth import require_login
 
 st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
 
-require_login()
+# gate the app behind Google sign-in
+if "auth" not in st.session_state:
+    with st.container(gap=None):
+        css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+        css.markdown("##### Evaluate stock picking portfolios against the market.")
+        css.markdown("###### Sign in to continue.")
+    a.get_auth(unique_key=1)
+    st.stop()
 
 with st.container(gap=None):
-    css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+        if st.button(key=c.LOGOUT_BUTTON_KEY_NAME, label="Logout"):
+            a.logout()
     css.markdown("##### Evaluate stock picking portfolios against the market.")
     css.divider()
 

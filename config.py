@@ -54,8 +54,8 @@ COLUMN_CONFIGS = {
 
 # aws vars
 S3_BUCKET = "pickwise-676206945006"
-TRADES_JSON_PATH = "trades.json"
-TICKER_DATA_PATH = "ticker_data.parquet"
+TRADES_JSON_FILENAME = "trades.json"
+TICKER_DATA_FILENAME = "ticker_data.parquet"
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = env("AWS_REGION")
@@ -66,8 +66,26 @@ s3 = boto3.client(
     region_name=AWS_REGION
 )
 
-# auth
-APP_PASSWORD = env("APP_PASSWORD")
+ddb = boto3.resource(
+    "dynamodb",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_REGION
+)
+
+# ddb table names
+USERS_TABLE = "users-pickwise"
+
+# Google OAuth2Component instance
+CLIENT_ID = env("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
+REDIRECT_URI = env("REDIRECT_URI")
+AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
+
+# misc auth/UI vars
+LOGOUT_BUTTON_KEY_NAME = "logout_button"
 
 # Pushover client
 po = Pushover(user_token=env("PUSHOVER_USER_TOKEN"), app_token=env("PUSHOVER_APP_TOKEN"), log_token=env("PUSHOVER_LOG_TOKEN"))

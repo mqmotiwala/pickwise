@@ -1,5 +1,6 @@
 import io
 import json
+import copy
 import config as c 
 import pandas as pd
 import yfinance as yf
@@ -43,9 +44,15 @@ def load_app_state():
         return close
 
     if "trades" not in st.session_state:
-        response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TRADES_JSON_PATH)
-        trades_str = response['Body'].read().decode('utf-8')
-        st.session_state["trades"] = json.loads(trades_str)
+        user = st.session_state.user
+        try:
+            response = c.s3.get_object(Bucket=c.S3_BUCKET, Key=user.TRADES_JSON_PATH)
+            trades_str = response['Body'].read().decode('utf-8')
+            st.session_state["trades"] = json.loads(trades_str)
+        except c.s3.exceptions.NoSuchKey:
+            # New user with no saved trades yet; seed with defaults.
+            # copy.deepcopy avoids mutating the module-level DEFAULT_TRADES constant.
+            st.session_state["trades"] = copy.deepcopy(c.DEFAULT_TRADES)
         st.session_state["tickers"] = set(trade["ticker"] for trade in st.session_state["trades"])
         st.session_state["tickers_by_tags"] = {tag: set([trade["ticker"] for trade in st.session_state["trades"] if tag in trade.get("tags", [])]) for tag in set(tag for trade in st.session_state["trades"] for tag in trade.get("tags", []))}
 
@@ -55,7 +62,7 @@ def load_app_state():
 
     if "ticker_data" not in st.session_state:
         try:
-            ticker_data_obj = c.s3.get_object(Bucket=c.S3_BUCKET, Key=c.TICKER_DATA_PATH)
+            ticker_data_obj = c.s3.get_object(Bucket=c.S3_BUCKET, Key=st.session_state.user.TICKER_DATA_PATH)
             st.session_state["ticker_data"] = pd.read_parquet(io.BytesIO(ticker_data_obj['Body'].read()))
         except c.s3.exceptions.NoSuchKey:
             st.session_state["ticker_data"] = pd.DataFrame()
@@ -180,7 +187,7 @@ def load_app_state():
             ticker_data[ticker_data["Date"].dt.date < today].to_parquet(buffer, index=False) 
             c.s3.put_object(
                 Bucket=c.S3_BUCKET,
-                Key=c.TICKER_DATA_PATH,
+                Key=st.session_state.user.TICKER_DATA_PATH,
                 Body=buffer.getvalue(),
                 ContentType='application/octet-stream'
             )
@@ -206,10 +213,13 @@ def save_trades(edited_trades):
     # Upload to S3
     c.s3.put_object(
         Bucket=c.S3_BUCKET,
-        Key=c.TRADES_JSON_PATH,
+        Key=st.session_state.user.TRADES_JSON_PATH,
         Body=json_buffer.getvalue(),
         ContentType='application/json'
     )
+
+    # notify about user trade activity
+    c.po.send_notification(f"{st.session_state.user} synced {len(edited_trades)} trades.")
 
     # Update session state after successful save
     del st.session_state["trades"]
