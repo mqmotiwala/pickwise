@@ -2,6 +2,7 @@ import os
 import boto3
 import streamlit as st
 
+from datetime import date, timedelta
 from dotenv import load_dotenv, find_dotenv
 from pushover import Pushover
 
@@ -26,13 +27,26 @@ DATES_FORMAT = "%Y-%m-%d"
 STOCK_PORTFOLIO_COL_NAME = "portfolio_value"
 MARKET_PORTFOLIO_COL_NAME = "market_value"
 RES_CSV_PATH = "res.csv"
-DEFAULT_TRADES = [{
-        "ticker":"AMZN",
-        "date":"2025-04-01",
-        "amount":1000.0,
-        "notes":"sample trade",
-        "enabled": True
-    }]
+
+# date ~6 months prior to today, used to seed example trades for new users
+_default_trade_date = (date.today() - timedelta(days=180)).strftime(DATES_FORMAT)
+
+# new users are seeded with these example trades so the app loads populated.
+# built DRY: both trades share everything except ticker and tag.
+DEFAULT_TRADES = [
+    {
+        "ticker": ticker,
+        "date": _default_trade_date,
+        "amount": 1000.0,
+        "notes": "example trade",
+        "tags": [tag],
+    }
+    for ticker, tag in [("AMZN", "executed"), ("NVDA", "hypothetical")]
+]
+
+# columns a trade record carries; used to build an empty trades frame
+# with the correct schema when a user has no trades yet
+TRADES_COLUMNS = ["ticker", "date", "amount", "notes", "tags"]
 
 # UI vars
 PREFERRED_UI_DATE_FORMAT_MOMENTJS = "dddd, MMMM DD, YYYY"
