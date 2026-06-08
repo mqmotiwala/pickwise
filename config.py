@@ -2,6 +2,7 @@ import os
 import boto3
 import streamlit as st
 
+from datetime import date, timedelta
 from dotenv import load_dotenv, find_dotenv
 from pushover import Pushover
 
@@ -26,15 +27,29 @@ DATES_FORMAT = "%Y-%m-%d"
 STOCK_PORTFOLIO_COL_NAME = "portfolio_value"
 MARKET_PORTFOLIO_COL_NAME = "market_value"
 RES_CSV_PATH = "res.csv"
-DEFAULT_TRADES = [{
-        "ticker":"AMZN",
-        "date":"2025-04-01",
-        "amount":1000.0,
-        "notes":"sample trade",
-        "enabled": True
-    }]
+
+# date ~6 months prior to today, used to seed example trades for new users
+_default_trade_date = (date.today() - timedelta(days=180)).strftime(DATES_FORMAT)
+
+# new users are seeded with these example trades so the app loads populated.
+# built DRY: both trades share everything except ticker and tag.
+DEFAULT_TRADES = [
+    {
+        "ticker": ticker,
+        "date": _default_trade_date,
+        "amount": 1000.0,
+        "notes": "example trade",
+        "tags": [tag],
+    }
+    for ticker, tag in [("AMZN", "executed"), ("NVDA", "hypothetical")]
+]
+
+# columns a trade record carries; used to build an empty trades frame
+# with the correct schema when a user has no trades yet
+TRADES_COLUMNS = ["ticker", "date", "amount", "notes", "tags"]
 
 # UI vars
+ASSETS_PATH = "assets"
 PREFERRED_UI_DATE_FORMAT_MOMENTJS = "dddd, MMMM DD, YYYY"
 PREFERRED_UI_DATE_FORMAT_DATETIME = "%A, %B %d, %Y"
 STOCK_PORTFOLIO_LABEL = 'Stock Picking Portfolio'
@@ -54,8 +69,8 @@ COLUMN_CONFIGS = {
 
 # aws vars
 S3_BUCKET = "pickwise-676206945006"
-TRADES_JSON_PATH = "trades.json"
-TICKER_DATA_PATH = "ticker_data.parquet"
+TRADES_JSON_FILENAME = "trades.json"
+TICKER_DATA_FILENAME = "ticker_data.parquet"
 AWS_ACCESS_KEY_ID = env("AWS_ACCESS_KEY_ID")
 AWS_SECRET_ACCESS_KEY = env("AWS_SECRET_ACCESS_KEY")
 AWS_REGION = env("AWS_REGION")
@@ -66,8 +81,26 @@ s3 = boto3.client(
     region_name=AWS_REGION
 )
 
-# auth
-APP_PASSWORD = env("APP_PASSWORD")
+ddb = boto3.resource(
+    "dynamodb",
+    aws_access_key_id=AWS_ACCESS_KEY_ID,
+    aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+    region_name=AWS_REGION
+)
+
+# ddb table names
+USERS_TABLE = "users-pickwise"
+
+# Google OAuth2Component instance
+CLIENT_ID = env("GOOGLE_CLIENT_ID")
+CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
+REDIRECT_URI = env("REDIRECT_URI")
+AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
+TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
+REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
+
+# misc auth/UI vars
+LOGOUT_BUTTON_KEY_NAME = "logout_button"
 
 # Pushover client
 po = Pushover(user_token=env("PUSHOVER_USER_TOKEN"), app_token=env("PUSHOVER_APP_TOKEN"), log_token=env("PUSHOVER_LOG_TOKEN"))

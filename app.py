@@ -3,19 +3,29 @@ import helpers as h
 import pandas as pd
 import config as c
 import css as css
+import auth as a
 import time
 import gc
 import matplotlib.pyplot as plt
 
+from landing import show_landing
 from streamlit_js_eval import streamlit_js_eval
-from auth import require_login
+
+# gate the app behind Google sign-in
+if "auth" not in st.session_state:
+    # centered layout suits the landing; set inside the branch so Streamlit
+    # transitions centered -> wide more seamlessly once logged in
+    st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="centered")
+    show_landing()
+    st.stop()
 
 st.set_page_config(page_title="Pickwise", page_icon="🤑", layout="wide")
 
-require_login()
-
 with st.container(gap=None):
-    css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        css.markdown(f"## {css.highlight("Pickwise", tilt=-2.5)} 🤑")
+        if st.button(key=c.LOGOUT_BUTTON_KEY_NAME, label="Logout"):
+            a.logout()
     css.markdown("##### Evaluate stock picking portfolios against the market.")
     css.divider()
 
@@ -27,13 +37,20 @@ st.text("""
 
 h.load_app_state()
 
-trades_df = pd.DataFrame(st.session_state.get("trades", [])).assign(
-        date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT)
-    ).sort_values(
-        by="date", 
-        ascending=False,
-        ignore_index=True
-    )
+trades = st.session_state.get("trades", [])
+if trades:
+    trades_df = pd.DataFrame(trades).assign(
+            date=lambda d: pd.to_datetime(d["date"], format=c.DATES_FORMAT)
+        ).sort_values(
+            by="date",
+            ascending=False,
+            ignore_index=True
+        )
+else:
+    # No trades yet (e.g. a new user). Build an empty frame with the expected
+    # schema so the data editor and downstream date handling don't break.
+    trades_df = pd.DataFrame(columns=c.TRADES_COLUMNS)
+    trades_df["date"] = pd.to_datetime(trades_df["date"], format=c.DATES_FORMAT)
 
 try:
     edited_trades = st.data_editor(
