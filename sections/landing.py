@@ -1,6 +1,6 @@
 import config as c
-import css as css
-import auth as a
+import utils.css as css
+import utils.auth as a
 import streamlit as st
 
 

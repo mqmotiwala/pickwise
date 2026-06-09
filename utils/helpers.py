@@ -526,4 +526,3 @@ def humanize_date(date_str):
         example: 2025-09-18 --> Thursday, September 18, 2025
     """
     return dt.strptime(date_str, c.DATES_FORMAT).strftime(c.PREFERRED_UI_DATE_FORMAT_DATETIME)
-

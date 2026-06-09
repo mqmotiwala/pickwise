@@ -4,7 +4,7 @@ import streamlit as st
 
 from datetime import date, timedelta
 from dotenv import load_dotenv, find_dotenv
-from pushover import Pushover
+from utils.pushover import Pushover
 
 # load environment variables from .env file
 load_dotenv(find_dotenv())

@@ -1,7 +1,7 @@
 import time
 import config as c
 
-from logger import logger
+from utils.logger import logger
 
 
 class User:
@@ -138,4 +138,3 @@ class User:
         self.ROOT_FOLDER = f"users/{self.email}"
         self.TRADES_JSON_PATH = f"{self.ROOT_FOLDER}/{c.TRADES_JSON_FILENAME}"
         self.TICKER_DATA_PATH = f"{self.ROOT_FOLDER}/{c.TICKER_DATA_FILENAME}"
-

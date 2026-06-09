@@ -4,8 +4,8 @@ import traceback
 import config as c
 import streamlit as st
 
-from user import User
-from logger import logger
+from utils.user import User
+from utils.logger import logger
 from streamlit_oauth import OAuth2Component, StreamlitOauthError
 
 
