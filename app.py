@@ -9,7 +9,6 @@ import gc
 import matplotlib.pyplot as plt
 
 from landing import show_landing
-from streamlit_js_eval import streamlit_js_eval
 
 # gate the app behind Google sign-in
 if "auth" not in st.session_state:
@@ -52,58 +51,20 @@ else:
     trades_df = pd.DataFrame(columns=c.TRADES_COLUMNS)
     trades_df["date"] = pd.to_datetime(trades_df["date"], format=c.DATES_FORMAT)
 
-try:
-    edited_trades = st.data_editor(
-        trades_df, 
-        num_rows="dynamic", 
-        column_config=c.COLUMN_CONFIGS,
-    )
+edited_trades = st.data_editor(
+    trades_df, 
+    num_rows="dynamic", 
+    column_config=c.COLUMN_CONFIGS,
+)
 
-    if st.button("Sync to Cloud", icon=":material/save:", type="primary"):
-        valid, error_msg = h.validate_changes(edited_trades)
+if st.button("Sync to Cloud", icon=":material/save:", type="primary"):
+    valid, error_msg = h.validate_changes(edited_trades)
 
-        if valid:
-            st.error(f"Save rejected. {error_msg}", icon="🚨")
-        else:
-            st.toast("Saved changes!", icon="💾")
-            h.save_trades(edited_trades)
-
-except ValueError:
-    css.divider()
-
-    st.warning(
-        """
-        Heads up, adding tags or sources to new trades in one step is not allowed.    
-        The recommended flow is:  
-        1. Add new trades 
-        2. Sync changes to the cloud
-        3. _Then_ apply tags or sources once the trade is logged.
-        """
-        , icon="⚠️"
-    )
-
-    with st.expander("But... why?"):
-        st.subheader("Why does this limitation exist?")
-        st.markdown("""
-            Pickwise stores the table data in Pandas before passing it to Apache Arrow,  
-            which handles syncing between Python and the browser.  
-
-            Arrow requires ListColumns (like the Tags and Source columns) to declare an inner type (e.g. `list<string>`).  
-            Pandas can only mark these columns as `object`, so Arrow infers the type from the first values it sees.  
-                    
-            When a new row is created, the cell starts as `[]`, which is an empty, typeless list; so Arrow can't serialize it.  
-        """)
-
-        st.subheader("Why does the recommended flow work?")
-        st.markdown("""
-            When editing tags or sources on existing trades, Arrow infers `list<string>` from previous trades (other rows in the same column).  
-        """)
-
-    if st.button("OK, I understand."):
-        streamlit_js_eval(js_expressions="parent.window.location.reload()")
-
-    # allows the rest of the app to be rendered
-    edited_trades = trades_df
+    if valid:
+        st.error(f"Save rejected. {error_msg}", icon="🚨")
+    else:
+        st.toast("Saved changes!", icon="💾")
+        h.save_trades(edited_trades)
 
 css.divider()
 

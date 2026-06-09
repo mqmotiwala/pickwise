@@ -1,8 +1,7 @@
 boto3==1.37.37
-streamlit==1.50.0
+streamlit==1.58.0
 streamlit_oauth==0.1.14
 pandas==2.2.3
 yfinance==0.2.58
 matplotlib==3.10.1
-streamlit_js_eval
 dotenv
