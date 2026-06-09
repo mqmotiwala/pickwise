@@ -1,4 +1,5 @@
 backup/*
 trades.json
+trades.*.json
 __pycache__/*
 .env

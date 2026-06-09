@@ -53,8 +53,27 @@ def load_app_state():
             # New user with no saved trades yet; seed with defaults.
             # copy.deepcopy avoids mutating the module-level DEFAULT_TRADES constant.
             st.session_state["trades"] = copy.deepcopy(c.DEFAULT_TRADES)
+
+        # Backfill `source` for trades persisted before the field existed so the
+        # editor and downstream filters can rely on the column being present.
+        # Uses [] to match the ListColumn shape used for tags.
+        for trade in st.session_state["trades"]:
+            trade.setdefault("source", [])
+
         st.session_state["tickers"] = set(trade["ticker"] for trade in st.session_state["trades"])
         st.session_state["tickers_by_tags"] = {tag: set([trade["ticker"] for trade in st.session_state["trades"] if tag in trade.get("tags", [])]) for tag in set(tag for trade in st.session_state["trades"] for tag in trade.get("tags", []))}
+        st.session_state["tickers_by_source"] = {
+            source: set(
+                trade["ticker"]
+                for trade in st.session_state["trades"]
+                if source in trade.get("source", [])
+            )
+            for source in set(
+                source
+                for trade in st.session_state["trades"]
+                for source in trade.get("source", [])
+            )
+        }
 
         st.toast(f"""Trading history loaded!  
             Monitoring {len(st.session_state['trades'])} trades across {len(st.session_state['tickers'])} tickers.
@@ -202,6 +221,13 @@ def save_trades(edited_trades):
     # then streamlit ListColumn fails to properly recognize newly added elements
     # to avoid this, force save empty tags as an empty array
     edited_trades["tags"] = edited_trades["tags"].apply(lambda x: [] if x is None else x)
+
+    # source is also a ListColumn, so apply the same None -> [] normalization
+    # to keep the persisted JSON shape consistent across all trades.
+    if "source" in edited_trades.columns:
+        edited_trades["source"] = edited_trades["source"].apply(lambda x: [] if x is None else x)
+    else:
+        edited_trades["source"] = [[] for _ in range(len(edited_trades))]
 
     # ensure tickers are uppercase strings
     edited_trades['ticker'] = edited_trades['ticker'].astype(str).str.upper()
@@ -462,9 +488,11 @@ def validate_changes(edited_trades):
         else returns False, None
     """
 
-    # allow tags to be empty
+    # allow tags and source to be empty
     # remaining cols must be filled
-    if edited_trades[[col for col in edited_trades.columns if col != "tags"]].isnull().values.any():
+    optional_cols = {"tags", "source"}
+    required_cols = [col for col in edited_trades.columns if col not in optional_cols]
+    if edited_trades[required_cols].isnull().values.any():
         return True, "You have trades with unfinished details."
     if (edited_trades["amount"].apply(lambda a: not isinstance(a, (int, float)) or a <= 0)).any():
         return True, "Amounts must be valid positive numbers."
@@ -477,6 +505,18 @@ def get_tags(edited_trades):
         if tags is not None:
             for tag in tags:
                 res.add(tag)
+
+    return res
+
+def get_sources(edited_trades):
+    """Collect the union of source values across all trades for filter UI."""
+    res = set()
+    if "source" not in edited_trades.columns:
+        return res
+    for sources in edited_trades["source"]:
+        if sources is not None:
+            for source in sources:
+                res.add(source)
 
     return res
 
