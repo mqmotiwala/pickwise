@@ -32,21 +32,25 @@ RES_CSV_PATH = "res.csv"
 _default_trade_date = (date.today() - timedelta(days=180)).strftime(DATES_FORMAT)
 
 # new users are seeded with these example trades so the app loads populated.
-# built DRY: both trades share everything except ticker and tag.
+# built DRY: trades share everything except ticker, source, and tag.
 DEFAULT_TRADES = [
     {
         "ticker": ticker,
         "date": _default_trade_date,
         "amount": 1000.0,
         "notes": "example trade",
+        "source": [source],
         "tags": [tag],
     }
-    for ticker, tag in [("AMZN", "executed"), ("NVDA", "hypothetical")]
+    for ticker, source, tag in [
+        ("AMZN", "Warren Buffett", "executed"),
+        ("NVDA", "/r/wallstreetbets", "hypothetical"),
+    ]
 ]
 
 # columns a trade record carries; used to build an empty trades frame
 # with the correct schema when a user has no trades yet
-TRADES_COLUMNS = ["ticker", "date", "amount", "notes", "tags"]
+TRADES_COLUMNS = ["ticker", "date", "amount", "notes", "source", "tags"]
 
 # UI vars
 ASSETS_PATH = "assets"
@@ -62,6 +66,7 @@ COLUMN_CONFIGS = {
     "latest_price": st.column_config.NumberColumn("Latest Price", format="dollar"),
     "amount": st.column_config.NumberColumn("Amount", format="dollar", width="small"),
     "notes": "Notes",
+    "source": st.column_config.ListColumn("Source", width="small"),
     "return": st.column_config.NumberColumn("Trade Return", format="percent"),
     "market_return": st.column_config.NumberColumn("Market Return", format="percent"),
     "tags": st.column_config.ListColumn("Tags", width="medium")
