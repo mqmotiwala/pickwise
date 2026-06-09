@@ -322,17 +322,19 @@ def plot_results(res, show_as_pct=False):
 
     portfolio = res["portfolio_value"]
     market = res["market_value"]
+    invested = res["total_invested"]
 
     if show_as_pct:
-        invested = res["total_invested"]
         portfolio = portfolio.where(invested > 0, 0.0)
         market = market.where(invested > 0, 0.0)
-        invested = invested.replace(0, 1)  # avoid division by zero; numerator is already 0
-        portfolio = (portfolio - res["total_invested"]) / invested * 100
-        market = (market - res["total_invested"]) / invested * 100
+        invested_safe = invested.replace(0, 1)  # avoid division by zero; numerator is already 0
+        portfolio = (portfolio - invested) / invested_safe * 100
+        market = (market - invested) / invested_safe * 100
 
     ax.plot(res['Date'], portfolio, label=c.STOCK_PORTFOLIO_LABEL)
     ax.plot(res['Date'], market, label=c.MARKET_PORTFOLIO_LABEL)
+    if not show_as_pct:
+        ax.plot(res['Date'], invested, label="Total Invested", linestyle="--", color="gray")
 
     # Add annotations for trades
     for i, row in res.iterrows():
