@@ -391,6 +391,7 @@ def get_metrics(res):
             trades_summary.append({
                 "ticker": trade["ticker"],
                 "date": trade["date"],
+                "amount": trade["amount"],
                 "purchase_price": purchase_price,
                 "latest_price": latest_price,
                 "return": (latest_price - purchase_price)/purchase_price,
