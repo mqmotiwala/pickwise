@@ -85,6 +85,9 @@ def logout():
     # clear local session state first
     st.session_state.clear()
 
-    # st.logout clears the identity cookie and reruns the app, returning the
-    # user to the unauthenticated landing state
+    # st.logout clears the identity cookie and queues a redirect to end the
+    # session, but it does NOT halt the current script run. Stop here so the
+    # rest of the authenticated page (which reads st.session_state.user) does
+    # not execute against the just-cleared state before the redirect lands.
     st.logout()
+    st.stop()
