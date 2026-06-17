@@ -1,6 +1,7 @@
 boto3==1.37.37
 streamlit==1.58.0
 Authlib==1.6.5
+httpx==0.28.1
 pandas==2.2.3
 yfinance==0.2.58
 matplotlib==3.10.1
