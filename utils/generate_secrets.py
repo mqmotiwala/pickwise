@@ -3,10 +3,12 @@ Generates .streamlit/secrets.toml from environment variables at startup.
 
 Streamlit's native authentication (st.login / st.user) reads its config from
 the [auth] section of .streamlit/secrets.toml -- it does NOT read environment
-variables. On hosts like Railway we only have env vars and no committed
-secrets.toml (it's gitignored), so this script materializes the file before the
-app launches. It is invoked from the Railway start command; local development
-uses a real .streamlit/secrets.toml and never runs this.
+variables. 
+
+Railway (deployment platform) only reads from env vars so this script materializes the file before the
+app launches. It is invoked from the Railway start command.
+
+Note: local development uses a real .streamlit/secrets.toml and never runs this.
 """
 
 import os
