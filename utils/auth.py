@@ -1,74 +1,74 @@
-import json
-import base64
+import time
 import traceback
-import config as c
 import streamlit as st
 
 from utils.user import User
 from utils.logger import logger
-from streamlit_oauth import OAuth2Component, StreamlitOauthError
+
+# the provider name here must match the [auth.<name>] section in secrets.toml
+GOOGLE_PROVIDER = "google"
 
 
-def get_auth(unique_key=None):
+def login_button(unique_key=None):
     """
-    Displays an OAuth2 login button using the provided client configuration
-    On successful login, gets an authentication token for Streamlit session state.
+    Renders a "Continue with Google" button that kicks off Streamlit's native
+    OIDC login flow (st.login).
+
+    native auth issues a signed identity cookie, 
+    so the user stays logged in across full page refreshes.
+    Authentication config lives in .streamlit/secrets.toml under [auth].
 
     Parameters:
-        unique_key: Optional.
-        A unique key to prevent component duplication errors in Streamlit.
-
-        If not provided, a random key will be generated internally.
-        But the generation is a function of element type and parameters,
-        so if this function is invoked multiple times, it'll produce a
-        "multiple component_instance elements with the same auto-generated ID" error.
-
-        So, pass unique_key argument to avoid this
+        unique_key: Optional. A unique key to avoid Streamlit duplicate-element
+        errors when the button is rendered more than once on a page.
     """
-
-    # streamlit requires key type to be str
-    if not isinstance(unique_key, str):
+    if unique_key is not None and not isinstance(unique_key, str):
         unique_key = str(unique_key)
 
+    clicked = st.button(
+        "Continue with Google",
+        icon=":material/login:",
+        use_container_width=True,
+        type="primary",
+        key=unique_key,
+    )
+
+    if clicked:
+        # st.login triggers a redirect to the identity provider. On return,
+        # Streamlit sets the identity cookie and st.user.is_logged_in becomes True.
+        st.login(GOOGLE_PROVIDER)
+
+
+def ensure_user_loaded():
+    """
+    Rebuilds the in-memory User object from the persistent identity cookie.
+
+    Streamlit keeps the user authenticated across page refreshes via a signed
+    cookie (exposed as st.user.is_logged_in). Session state, however, is cleared
+    on every refresh, so the User object must be reconstructed from the st.user
+    OIDC claims whenever it is missing from session state.
+
+    Callers should only invoke this when st.user.is_logged_in is True.
+    """
+    if st.session_state.get("user") is not None:
+        return
+
     try:
-        # create a button to start the OAuth2 flow
-        oauth2 = OAuth2Component(c.CLIENT_ID, c.CLIENT_SECRET, c.AUTHORIZE_ENDPOINT, c.TOKEN_ENDPOINT, c.TOKEN_ENDPOINT, c.REVOKE_ENDPOINT)
-        result = oauth2.authorize_button(
-            name="Continue with Google",
-            icon="https://www.google.com.tw/favicon.ico",
-            redirect_uri=c.REDIRECT_URI,
-            scope="openid email profile",
-            # streamlit will raise an error if elements are duplicated without unique keys
-            key=unique_key,
-            extras_params={"access_type": "offline", "prompt": "select_account"},
-            use_container_width=True,
-            pkce='S256',
-        )
+        # st.user behaves like a mapping of OIDC claims returned by Google
+        payload = {
+            "sub": st.user.get("sub"),
+            "email": st.user.get("email"),
+            "name": st.user.get("name"),
+            "given_name": st.user.get("given_name"),
+            "family_name": st.user.get("family_name"),
+            "picture": st.user.get("picture"),
+            "iat": st.user.get("iat", int(time.time())),
+        }
 
-        if result:
-            token = result["token"]
-            st.session_state["token"] = token
+        st.session_state["user"] = User(payload=payload)
+        st.session_state["auth"] = st.session_state.user.email
 
-            # decode the id_token jwt and get the user's email address
-            id_token = result["token"]["id_token"]
-            payload = id_token.split(".")[1]
-            # add padding to the payload if needed
-            payload += "=" * (-len(payload) % 4)
-            payload = json.loads(base64.b64decode(payload))
-
-            # instantiate User object
-            st.session_state["user"] = User(payload=payload)
-            st.session_state["auth"] = st.session_state.user.email
-
-            logger.info(f"{st.session_state.user} authenticated successfully")
-
-            # rerun the app to reflect the new state
-            st.rerun()
-
-    except StreamlitOauthError as e:
-        # user cancelled the OAuth2 flow
-        logger.warning("OAuth2 flow was cancelled by user attempting to log in.")
-        pass
+        logger.info(f"{st.session_state.user} authenticated successfully")
 
     except Exception as e:
         logger.error(f"An error occurred during authentication: {e}")
@@ -82,8 +82,9 @@ def get_auth(unique_key=None):
 def logout():
     logger.info(f"{st.session_state.user} logged out")
 
-    # effectively resets the session
+    # clear local session state first
     st.session_state.clear()
 
-    # rerun the app to reflect the new state
-    st.rerun()
+    # st.logout clears the identity cookie and reruns the app, returning the
+    # user to the unauthenticated landing state
+    st.logout()

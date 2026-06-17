@@ -22,4 +22,4 @@ def show_landing():
     st.image(f"{c.ASSETS_PATH}/example-results.png")
 
     css.header("Sign in to get started", lvl=6)
-    a.get_auth(unique_key=1)
+    a.login_button(unique_key="landing_login")
