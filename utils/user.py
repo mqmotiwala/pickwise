@@ -22,6 +22,13 @@ class User:
     def __init__(self, payload):
         self.user_id = payload.get("sub")
 
+        # the iat ("issued at") claim of the current identity token. Streamlit
+        # freezes the OIDC claims in a signed cookie at login time and reuses
+        # them across page refreshes, so iat is stable for the life of a login
+        # and only changes when the user genuinely logs in again. We use it to
+        # avoid treating page refreshes as fresh logins.
+        current_login_iat = payload.get("iat")
+
         if self.is_new_user():
             self.init_user_data(payload)
             self.set_user_data()
@@ -30,11 +37,24 @@ class User:
 
         else:
             self.get_user_data()
-            self.update_last_login()
+            stored_login_iat = getattr(self, "login_token_iat", None)
 
-            ordinal = "st" if self.num_logins == 1 else "nd" if self.num_logins == 2 else "rd" if self.num_logins == 3 else "th"
-            logger.info(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
-            c.po.send_notification(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
+            # a refresh reuses the same identity cookie => same iat. Skip the
+            # login side effects (counter bump + notification) in that case.
+            is_refresh = (
+                current_login_iat is not None
+                and stored_login_iat is not None
+                and current_login_iat == stored_login_iat
+            )
+
+            if is_refresh:
+                logger.info(f"{self} resumed an existing session (page refresh); not counted as a new login")
+            else:
+                self.record_login(current_login_iat)
+
+                ordinal = "st" if self.num_logins == 1 else "nd" if self.num_logins == 2 else "rd" if self.num_logins == 3 else "th"
+                logger.info(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
+                c.po.send_notification(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
 
         self.load_user_variables()
 
@@ -61,6 +81,9 @@ class User:
         # additional attributes
         self.num_logins = 1
         self.last_login = self.created_at
+
+        # fingerprint of the login token; used to tell refreshes from new logins
+        self.login_token_iat = self.created_at
 
     def set_user_data(self):
         """update user data in DynamoDB"""
@@ -91,17 +114,30 @@ class User:
 
         return attr
 
-    def update_last_login(self):
-        """Updates the last login timestamp."""
+    def record_login(self, login_token_iat=None):
+        """
+        Record a genuine login: update the timestamp, atomically increment the
+        login counter, and store the identity token's iat so future page
+        refreshes (which reuse the same iat) are not counted as new logins.
+        """
         self.last_login = int(time.time())
+
+        # keep the in-memory counter in step for the log/notification message
+        self.num_logins = int(getattr(self, "num_logins", 0)) + 1
+
+        # ADD keeps the DynamoDB increment atomic under concurrent logins
+        update_expr = "SET last_login = :ts ADD num_logins :inc"
+        expr_values = {":ts": self.last_login, ":inc": 1}
+
+        if login_token_iat is not None:
+            self.login_token_iat = login_token_iat
+            update_expr = "SET last_login = :ts, login_token_iat = :iat ADD num_logins :inc"
+            expr_values[":iat"] = login_token_iat
 
         self.table.update_item(
             Key={"user_id": self.user_id},
-            UpdateExpression="SET last_login = :ts ADD num_logins :inc",
-            ExpressionAttributeValues={
-                ":ts": self.last_login,
-                ":inc": 1
-            }
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_values
         )
 
     def increment_attribute(self, attr_name, increment=1):

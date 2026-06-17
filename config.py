@@ -96,14 +96,6 @@ ddb = boto3.resource(
 # ddb table names
 USERS_TABLE = "users-pickwise"
 
-# Google OAuth2Component instance
-CLIENT_ID = env("GOOGLE_CLIENT_ID")
-CLIENT_SECRET = env("GOOGLE_CLIENT_SECRET")
-REDIRECT_URI = env("REDIRECT_URI")
-AUTHORIZE_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth"
-TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token"
-REVOKE_ENDPOINT = "https://oauth2.googleapis.com/revoke"
-
 # misc auth/UI vars
 LOGOUT_BUTTON_KEY_NAME = "logout_button"
 
