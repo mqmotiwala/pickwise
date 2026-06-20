@@ -12,6 +12,7 @@ import matplotlib.ticker as mticker
 from curl_cffi import requests
 from datetime import datetime as dt
 from datetime import timedelta as td
+from streamlit.components.v1 import html
 
 # session is required to avoid 429s from yfinance
 # I believe yfinance rate limits based on User-Agent header
@@ -526,3 +527,24 @@ def humanize_date(date_str):
         example: 2025-09-18 --> Thursday, September 18, 2025
     """
     return dt.strptime(date_str, c.DATES_FORMAT).strftime(c.PREFERRED_UI_DATE_FORMAT_DATETIME)
+
+
+def render_animation(name: str, height: int = 470):
+    """
+    Render an HTML/CSS animation by file stem.
+
+    These are self-contained vector animations (no GIF, no video),
+    so they stay crisp at any DPI and weigh only a few KB each.
+
+    Uses st.components.v1.html which renders in an iframe (required for isolation).
+    Note: this is deprecated after 2026-06-01 in favor of st.iframe.
+    I choose to still use this because the Streamlit app is pinned to an older version in deployment.
+    But should be warned that this would break, alongside other uses of v1 html(), if Streamlit is updated.
+
+    Args:
+        name: file stem, e.g. "example-results"
+        height: iframe height in px (default suits centered layout ~704px wide)
+    """
+    with open(f"{c.ASSETS_PATH}/animations/{name}.html", encoding="utf-8") as f:
+        html_content = f.read()
+    html(html_content, height=height, scrolling=False)

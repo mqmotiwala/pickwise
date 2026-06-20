@@ -1,6 +1,7 @@
 import config as c
 import utils.css as css
 import utils.auth as a
+import utils.helpers as h
 import streamlit as st
 
 
@@ -19,6 +20,6 @@ def show_landing():
     Track your portfolio performance with views like this.  
     """
     css.markdown(f"{explanation_text}")
-    st.image(f"{c.ASSETS_PATH}/example-results.png")
+    h.render_animation("example-results")
 
     a.login_button(unique_key="landing_login")
