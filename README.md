@@ -1,2 +1,2 @@
-super simple utility created to evaluate hypothethical stock trades against a broad market index fund.  
+a simple web app created to evaluate hypothethical stock picking strategies against broad market ETF investing.  
 hosted on https://pickwise.up.railway.app
