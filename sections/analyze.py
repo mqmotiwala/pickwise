@@ -92,14 +92,39 @@ def show_analyze():
         )
     else:
         metrics, trades_summary = h.get_metrics(res)
+
+        def render_metric(metric):
+            st.metric(
+                label=metric["label"],
+                value=metric["value"],
+                delta=metric.get("delta", None),
+                help=metric.get("help", None),
+            )
+
+            trades_breakdown = metric.get("trades", None)
+            if trades_breakdown is not None:
+                with st.popover("View trades", use_container_width=True):
+                    st.dataframe(
+                        trades_breakdown,
+                        column_config=c.TRADE_BREAKDOWN_COLUMN_CONFIGS,
+                        hide_index=True,
+                    )
+
+        # Metrics carrying a trade breakdown get their own row. A popover can
+        # only be as wide as the column holding it, so sharing a row with every
+        # other metric squeezes the table into an unreadable sliver.
+        breakdown_metrics = [metric for metric in metrics if "trades" in metric]
+        summary_metrics = [metric for metric in metrics if "trades" not in metric]
+
+        if breakdown_metrics:
+            for column, metric in zip(st.columns(len(breakdown_metrics)), breakdown_metrics):
+                with column:
+                    render_metric(metric)
+
         with st.container(border=False, horizontal=True, gap="small", horizontal_alignment="distribute"):
-            for metric in metrics:
-                st.metric(
-                    label=metric["label"],
-                    value=metric["value"],
-                    delta=metric.get("delta", None),
-                    help=metric.get("help", None),
-                )
+            for metric in summary_metrics:
+                with st.container(border=False):
+                    render_metric(metric)
 
         st.dataframe(
             pd.DataFrame(trades_summary).sort_values(by="date", ascending=False, ignore_index=True).style.applymap(h.color_vals, subset=["return", "market_return"]),

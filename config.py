@@ -72,6 +72,14 @@ COLUMN_CONFIGS = {
     "tags": st.column_config.ListColumn("Tags", width="medium")
 }
 
+# columns for the winning/losing trade breakdown shown in the metric popovers
+TRADE_BREAKDOWN_COLUMN_CONFIGS = {
+    "_index": None,
+    "date": st.column_config.DateColumn("Date", format=PREFERRED_UI_DATE_FORMAT_MOMENTJS),
+    "ticker": st.column_config.TextColumn("Ticker", width="small"),
+    "excess_return": st.column_config.NumberColumn(f"vs {MARKET}", format="percent"),
+}
+
 # aws vars
 S3_BUCKET = "pickwise-676206945006"
 TRADES_JSON_FILENAME = "trades.json"

@@ -395,6 +395,22 @@ def plot_results(res, show_as_pct=False):
 
     return fig
 
+def trades_breakdown(trades):
+    """
+        Builds the per-trade breakdown shown in the winning/losing metric popovers.
+
+        Each trade is a dict with "date", "ticker" and "excess_return" keys.
+        Returns a DataFrame sorted newest first, or None when there are no
+        trades so the caller can skip the popover entirely.
+    """
+    if not trades:
+        return None
+
+    breakdown = pd.DataFrame(trades)
+    breakdown["date"] = pd.to_datetime(breakdown["date"], format=c.DATES_FORMAT)
+
+    return breakdown.sort_values(by="date", ascending=False, ignore_index=True)
+
 def get_metrics(res):
     metrics = []
 
@@ -411,42 +427,60 @@ def get_metrics(res):
         for trade in row["trades"]:
             total_invested += trade["amount"]
 
-            trade_id = f"{trade['date']} | {trade['ticker']}"
             purchase_price = row[trade["ticker"]]
             latest_price = latest_date[trade["ticker"]]
             latest_market_price = latest_date[c.MARKET]
+
+            trade_return = (latest_price - purchase_price)/purchase_price
+            market_return = (latest_market_price - market_purchase_price)/market_purchase_price
+
             trades_summary.append({
                 "ticker": trade["ticker"],
                 "date": trade["date"],
                 "amount": trade["amount"],
                 "purchase_price": purchase_price,
                 "latest_price": latest_price,
-                "return": (latest_price - purchase_price)/purchase_price,
-                "market_return": (latest_market_price - market_purchase_price)/market_purchase_price
+                "return": trade_return,
+                "market_return": market_return
             })
 
-            if purchase_price < latest_price:
-                winners.append(trade_id)
+            # A trade only wins if it beat what the same money would have earned
+            # in the market over the identical holding period.
+            excess_return = trade_return - market_return
+            classified = {
+                "date": trade["date"],
+                "ticker": trade["ticker"],
+                "excess_return": excess_return,
+            }
+            if excess_return > 0:
+                winners.append(classified)
             else:
-                losers.append(trade_id)
+                losers.append(classified)
 
     # metrics: number of winning/losing trades
+    beat_market_help = f"A trade wins when its return beats {c.MARKET} over the same holding period."
     metrics.append({
         "label": "Winning Trades", 
         "value": len(winners),
-        "help": "**Winning trades**\n\n" + "\n\n".join(winners) if winners else "No winners! 😞",
+        "help": beat_market_help if winners else f"No winners! 😞\n\n{beat_market_help}",
+        "trades": trades_breakdown(winners),
     })
 
     metrics.append({
         "label": "Losing Trades", 
         "value": len(losers),
-        "help": "**Losing trades**\n\n" + "\n\n".join(losers) if losers else "No losers! 🎉",
+        "help": beat_market_help if losers else f"No losers! 🎉\n\n{beat_market_help}",
+        "trades": trades_breakdown(losers),
     })
 
     # metric: success rate
     total_trades = res["trades"].apply(len).sum()
     winning_percentage = len(winners) / total_trades * 100 if total_trades else 0
-    metrics.append({"label": "Success Rate", "value": f"{winning_percentage:.0f}%"})
+    metrics.append({
+        "label": "Success Rate",
+        "value": f"{winning_percentage:.0f}%",
+        "help": f"Share of trades that outperformed {c.MARKET} over the same holding period."
+    })
 
     # metric: number of trades
     metrics.append({
