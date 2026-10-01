@@ -13,6 +13,7 @@ from curl_cffi import requests
 from datetime import datetime as dt
 from datetime import timedelta as td
 from streamlit.components.v1 import html
+from utils.logger import log_event
 
 # session is required to avoid 429s from yfinance
 # I believe yfinance rate limits based on User-Agent header
@@ -246,6 +247,7 @@ def save_trades(edited_trades):
     )
 
     # notify about user trade activity
+    log_event("trades_synced", st.session_state.user, count=len(edited_trades))
     c.po.send_notification(f"{st.session_state.user} synced {len(edited_trades)} trades.")
 
     # Update session state after successful save

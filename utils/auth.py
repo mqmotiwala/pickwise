@@ -3,7 +3,7 @@ import traceback
 import streamlit as st
 
 from utils.user import User
-from utils.logger import logger
+from utils.logger import logger, log_event
 
 # the provider name here must match the [auth.<name>] section in secrets.toml
 GOOGLE_PROVIDER = "google"
@@ -68,10 +68,10 @@ def ensure_user_loaded():
         st.session_state["user"] = User(payload=payload)
         st.session_state["auth"] = st.session_state.user.email
 
-        logger.info(f"{st.session_state.user} authenticated successfully")
+        log_event("auth_success", st.session_state.user)
 
     except Exception as e:
-        logger.error(f"An error occurred during authentication: {e}")
+        log_event("auth_failure", level="error", error=e)
 
         st.error(f"An error occurred during authentication: {e}")
         st.text("Detailed traceback:")
@@ -80,7 +80,7 @@ def ensure_user_loaded():
 
 
 def logout():
-    logger.info(f"{st.session_state.user} logged out")
+    log_event("logout", st.session_state.user)
 
     # clear local session state first
     st.session_state.clear()

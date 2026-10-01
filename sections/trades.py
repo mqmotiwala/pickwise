@@ -5,6 +5,8 @@ import config as c
 import utils.css as css
 import utils.helpers as h
 
+from utils.logger import log_event
+
 
 def show_trades():
     """
@@ -46,6 +48,7 @@ def show_trades():
         valid, error_msg = h.validate_changes(edited_trades)
 
         if valid:
+            log_event("trades_save_rejected", st.session_state.user, level="warning", reason=error_msg)
             st.error(f"Save rejected. {error_msg}", icon="🚨")
         else:
             st.toast("Saved changes!", icon="💾")

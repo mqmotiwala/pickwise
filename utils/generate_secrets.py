@@ -29,11 +29,35 @@ REQUIRED_VARS = (
 GOOGLE_METADATA_URL = "https://accounts.google.com/.well-known/openid-configuration"
 
 
-def _require(name):
-    value = os.getenv(name)
-    if not value:
-        raise SystemExit(f"[generate_secrets] Missing required env var: {name}")
-    return value
+def _require_all(names):
+    """
+    Resolve every required env var at once.
+
+    Reports the full present/missing picture in one go rather than dying on the
+    first gap, so a failed deploy tells you everything that needs setting
+    instead of costing one deploy cycle per missing variable. Only names are
+    printed, never values.
+    """
+
+    values, missing = {}, []
+    for name in names:
+        value = os.getenv(name)
+        if value:
+            values[name] = value
+        else:
+            missing.append(name)
+
+    print(f"[generate_secrets] present: {sorted(values) or 'none'}")
+
+    if missing:
+        print(f"[generate_secrets] MISSING: {missing}")
+        raise SystemExit(
+            f"[generate_secrets] Missing required env var(s): {', '.join(missing)}. "
+            "Set them on the Railway service (Variables tab); this script only copies "
+            "them into .streamlit/secrets.toml, it does not invent values."
+        )
+
+    return values
 
 
 def _toml_escape(value):
@@ -42,7 +66,7 @@ def _toml_escape(value):
 
 
 def main():
-    values = {name: _toml_escape(_require(name)) for name in REQUIRED_VARS}
+    values = {name: _toml_escape(v) for name, v in _require_all(REQUIRED_VARS).items()}
 
     secrets = (
         "[auth]\n"
@@ -63,8 +87,15 @@ def main():
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(secrets, encoding="utf-8")
 
-    # never print secret values
-    print(f"[generate_secrets] Wrote {path} with [auth] and [auth.google] sections")
+    # log the resolved absolute path and cwd, never secret values. Streamlit
+
+    # looks for secrets.toml relative to where it is launched, so a mismatch
+
+    # here is the thing to look at if the file is written but not picked up.
+
+    print(f"[generate_secrets] cwd: {Path.cwd()}")
+
+    print(f"[generate_secrets] Wrote {path.resolve()} with [auth] and [auth.google] sections")
 
 
 if __name__ == "__main__":

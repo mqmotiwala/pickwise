@@ -1,7 +1,7 @@
 import time
 import config as c
 
-from utils.logger import logger
+from utils.logger import logger, log_event
 
 
 class User:
@@ -32,7 +32,7 @@ class User:
         if self.is_new_user():
             self.init_user_data(payload)
             self.set_user_data()
-            logger.info(f"{self} just registered as a new user!")
+            log_event("user_registered", self)
             c.po.send_notification(f"{self} just registered as a new user!")
 
         else:
@@ -48,12 +48,12 @@ class User:
             )
 
             if is_refresh:
-                logger.info(f"{self} resumed an existing session (page refresh); not counted as a new login")
+                log_event("session_resumed", self)
             else:
                 self.record_login(current_login_iat)
 
                 ordinal = "st" if self.num_logins == 1 else "nd" if self.num_logins == 2 else "rd" if self.num_logins == 3 else "th"
-                logger.info(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
+                log_event("user_login", self, login_count=self.num_logins)
                 c.po.send_notification(f"{self} just logged in for the {self.num_logins}{ordinal} time!")
 
         self.load_user_variables()
