@@ -1,5 +1,5 @@
 boto3==1.37.37
-streamlit==1.58.0
+streamlit==1.66.1
 Authlib==1.6.5
 httpx==0.28.1
 watchtower==3.4.0
