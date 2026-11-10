@@ -28,6 +28,16 @@ STOCK_PORTFOLIO_COL_NAME = "portfolio_value"
 MARKET_PORTFOLIO_COL_NAME = "market_value"
 RES_CSV_PATH = "res.csv"
 
+# each price refresh re-downloads this many calendar days that are already cached.
+# Yahoo rewrites past closes after a split or dividend, so if those days no longer
+# match the cache, that ticker's cached history is stale and gets re-downloaded.
+PRICE_REFRESH_OVERLAP_DAYS = 7
+PRICE_ADJUSTMENT_TOLERANCE = 1e-4  # relative difference that counts as a rewrite
+
+# a trade dated on a weekend or market holiday is priced at the next trading day's
+# close, if there is one within this many days (a longer gap means prices are missing)
+MAX_DAYS_TO_NEXT_TRADING_DAY = 7
+
 # date ~6 months prior to today, used to seed example trades for new users
 _default_trade_date = (date.today() - timedelta(days=180)).strftime(DATES_FORMAT)
 

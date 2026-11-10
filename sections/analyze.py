@@ -91,6 +91,16 @@ def show_analyze():
             icon="⚠️",
         )
     else:
+        # trades with no prices on or shortly after their date (e.g. dated in the future)
+        # are left out of the results, so say so instead of dropping them silently
+        unpriced = len(tagged_trades) - int(res["trades"].apply(len).sum())
+        if unpriced:
+            st.info(
+                f"{unpriced} trade{'s' if unpriced != 1 else ''} dated after the latest available "
+                f"prices {'are' if unpriced != 1 else 'is'} not included yet.",
+                icon=":material/schedule:",
+            )
+
         metrics, trades_summary = h.get_metrics(res)
 
         def render_metric(metric):

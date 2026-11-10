@@ -1,6 +1,7 @@
 import io
 import json
 import copy
+import bisect
 import config as c 
 import pandas as pd
 import yfinance as yf
@@ -20,17 +21,46 @@ from utils.logger import log_event
 # which, without this session, is set to python-requests
 session = requests.Session(impersonate="chrome")
 
+def _combine_prices(base, fresh):
+    """Overlay `fresh` prices onto `base` by date. Fresh values win; `base` fills any gaps."""
+    if base.empty:
+        return fresh.copy()
+    combined = fresh.set_index("Date").combine_first(base.set_index("Date"))
+    return combined.rename_axis("Date").reset_index()
+
+def _find_rewritten_tickers(cached, fresh):
+    """
+        Tickers whose cached closes no longer match a fresh download of the same days.
+
+        Yahoo adjusts every earlier close after a split or dividend, so a mismatch on
+        any overlapping day means that ticker's whole cached history is out of date.
+    """
+    if cached.empty or fresh.empty:
+        return set()
+    cached = cached.set_index("Date")
+    cached = cached[~cached.index.duplicated(keep="last")]
+    fresh = fresh.set_index("Date")
+    dates = cached.index.intersection(fresh.index)
+    tickers = cached.columns.intersection(fresh.columns)
+    if dates.empty or tickers.empty:
+        return set()
+    old = cached.loc[dates, tickers].apply(pd.to_numeric, errors="coerce")
+    new = fresh.loc[dates, tickers].apply(pd.to_numeric, errors="coerce")
+    drift = (new / old - 1).abs()
+    return set(drift.columns[(drift > c.PRICE_ADJUSTMENT_TOLERANCE).any()])
+
 def load_app_state():
     """ load trades & stock data into session state. """
 
-    def _download_close(tickers, start_date):
-        """ Pull daily close prices only for required date windows. """
-        if not tickers or start_date > today:
+    def _download_close(tickers, start_date, end_date=None):
+        """ Pull daily close prices from start_date through end_date (default: today). """
+        end_date = end_date or today
+        if not tickers or start_date > end_date:
             return pd.DataFrame()
         close = yf.download(
             sorted(tickers),
             start=start_date,
-            end=today + td(days=1),
+            end=end_date + td(days=1),
             interval="1d",
             session=session,
             progress=False,
@@ -113,16 +143,28 @@ def load_app_state():
             if ticker_data.empty:
                 ticker_data = pd.DataFrame(columns=["Date"])
 
+        # Prices are needed from the earliest trade onward.
+        trades = st.session_state.get("trades", [])
+        history_start = min(
+            (dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in trades),
+            default=today,
+        )
+
         # Figure out what needs to be fetched:
         # 1) tickers that are present in trades but missing from stored parquet columns
-        # 2) newer dates after the latest cached row
+        # 2) days before the cached window, when a trade predates it (e.g. an older trade added later)
+        # 3) newer dates after the latest cached row
         missing_tickers = required_tickers - existing_tickers
+        cached_tickers = required_tickers & existing_tickers
+        needs_older_history = earliest_date is not None and history_start < earliest_date
         needs_date_refresh = latest_date is None or latest_date < today
 
-        if missing_tickers or needs_date_refresh:
+        if missing_tickers or needs_older_history or needs_date_refresh:
             toast_lines = ["Refreshing stock data for..."]
             if missing_tickers:
                 toast_lines.append(f"{len(missing_tickers)} new tickers")
+            if needs_older_history:
+                toast_lines.append(f"history back to {history_start}")
             if needs_date_refresh:
                 toast_lines.append(
                     f"new data since {latest_date or earliest_date or 'latest trade date.'}"
@@ -133,50 +175,41 @@ def load_app_state():
             st.toast("Cached stock data loaded. No refresh needed.")
 
         updated = False
-        # Backfill missing ticker columns across the full available date range so
-        # all symbols share the same historical timeline in one DataFrame.
-        if missing_tickers:
-            if earliest_date is not None:
-                missing_start = earliest_date
-            else:
-                # If no cached data exists yet, infer start from earliest trade date.
-                trades = st.session_state.get("trades", [])
-                if trades:
-                    missing_start = min(
-                        dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in trades
-                    )
-                else:
-                    # No trades means no historical backfill is needed.
-                    missing_start = today
+        # First day the cache must cover once this refresh is done.
+        coverage_start = min(history_start, earliest_date) if earliest_date is not None else history_start
 
-            missing_data = _download_close(missing_tickers, missing_start)
+        # Backfill missing ticker columns across the full date range so all symbols
+        # share the same historical timeline. On a cold start this is every ticker.
+        if missing_tickers:
+            missing_data = _download_close(missing_tickers, coverage_start)
             if not missing_data.empty:
-                # Outer merge preserves existing rows and adds new ticker columns.
-                ticker_data = ticker_data.merge(missing_data, on="Date", how="outer")
+                ticker_data = _combine_prices(ticker_data, missing_data)
                 updated = True
 
-        # Append only dates newer than the last cached date for all required tickers.
-        if needs_date_refresh and required_tickers:
-            if latest_date is None:
-                # Cold start: build initial history from earliest trade date.
-                trades = st.session_state.get("trades", [])
-                if trades:
-                    refresh_start = min(
-                        dt.strptime(trade["date"], c.DATES_FORMAT).date() for trade in trades
-                    )
-                else:
-                    refresh_start = today
-            else:
-                # Incremental refresh starts the day after the most recent cached date.
-                refresh_start = latest_date + td(days=1)
+        # Extend cached tickers back to the earliest trade.
+        if needs_older_history and cached_tickers:
+            older_data = _download_close(cached_tickers, history_start, end_date=earliest_date - td(days=1))
+            if not older_data.empty:
+                ticker_data = _combine_prices(ticker_data, older_data)
+                updated = True
 
-            refresh_data = _download_close(required_tickers, refresh_start)
+        # Fetch dates after the last cached one. The download starts a few days early so
+        # already-cached days can be checked against what Yahoo reports for them now.
+        if needs_date_refresh and cached_tickers:
+            refresh_start = latest_date - td(days=c.PRICE_REFRESH_OVERLAP_DAYS)
+            refresh_data = _download_close(cached_tickers, refresh_start)
             if not refresh_data.empty:
-                # Ensure schema compatibility before concat when new columns appear.
-                for col in refresh_data.columns:
-                    if col != "Date" and col not in ticker_data.columns:
-                        ticker_data[col] = pd.NA
-                ticker_data = pd.concat([ticker_data, refresh_data], ignore_index=True, sort=False)
+                # A split or dividend since the last refresh rewrites every earlier close.
+                # Appending to the old history would show a fake jump at that date (about
+                # -90% for a 10-for-1 split), so re-download those tickers' full history.
+                rewritten = _find_rewritten_tickers(ticker_data, refresh_data)
+                if rewritten:
+                    full_history = _download_close(rewritten, coverage_start)
+                    if not full_history.empty:
+                        ticker_data = _combine_prices(ticker_data.drop(columns=sorted(rewritten)), full_history)
+                        st.toast(f"Re-downloaded price history for {', '.join(sorted(rewritten))} after a split or dividend.")
+
+                ticker_data = _combine_prices(ticker_data, refresh_data)
                 updated = True
 
         # Clean up stale tickers that are no longer in trades.
@@ -256,7 +289,7 @@ def save_trades(edited_trades):
     st.rerun()
 
 def generate_results(tagged_trades):
-    res = st.session_state["ticker_data"].copy()
+    res = st.session_state["ticker_data"].sort_values("Date", ignore_index=True)
     
     # trim res to only include dates from 30 days before the earliest trade to today
     if tagged_trades:
@@ -269,9 +302,9 @@ def generate_results(tagged_trades):
     if price_cols and res[price_cols].isna().values.any():
         res[price_cols] = res[price_cols].ffill()
 
-    # group trades by date 
+    # group trades by the trading day they fill on
     # then add a trades column containing list of trades on a given date
-    trades_map = generate_trades_map(tagged_trades)
+    trades_map = generate_trades_map(tagged_trades, trading_days=res["Date"].dt.date.tolist())
 
     # track trades col in res df for trades executed on given date
     res["trades"] = res["Date"].dt.date.map(lambda d: trades_map.get(d, []))
@@ -336,10 +369,24 @@ def calculate_cumulative_shares(df):
 
     return df
 
-def generate_trades_map(trades):
+def generate_trades_map(trades, trading_days=None):
+    """
+        Groups trades by the day they fill on.
+
+        Price rows only exist for trading days. With `trading_days` (sorted dates that
+        have prices), a trade dated on a weekend or market holiday fills at the next
+        trading day's close. A trade with no trading day within
+        c.MAX_DAYS_TO_NEXT_TRADING_DAY of its date (e.g. one dated in the future) is
+        left out, since it can't be priced yet.
+    """
     trades_map = {}
     for trade in trades:
         date = dt.strptime(trade["date"], c.DATES_FORMAT).date()
+        if trading_days is not None:
+            i = bisect.bisect_left(trading_days, date)
+            if i == len(trading_days) or (trading_days[i] - date).days > c.MAX_DAYS_TO_NEXT_TRADING_DAY:
+                continue
+            date = trading_days[i]
         if date not in trades_map:
             trades_map[date] = []
         trades_map[date].append(trade)
